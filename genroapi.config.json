@@ -1,0 +1,18 @@
+{
+  "url": "https://device-intelligence-api.tail87760.ts.net/openapi.yaml",
+  "prefix": "/deviceIntelligence",
+  "options": {
+    "query": false,
+    "zod": false,
+    "zustand": false,
+    "backend": "none",
+    "go": {
+      "package": "routers",
+      "teaImport": "teadash/functions/Tea"
+    }
+  },
+  "outDirs": {
+    "frontend": "src/api",
+    "backend": ""
+  }
+}

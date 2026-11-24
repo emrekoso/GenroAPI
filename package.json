@@ -2,7 +2,17 @@
   "name": "genroapi",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
-  "scripts": { "test": "vitest run", "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/server" },
-  "devDependencies": { "typescript": "^5.4.0", "vitest": "^1.6.0", "@types/node": "^20.0.0" }
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/server && tsc --noEmit -p packages/ui && tsc --noEmit -p packages/cli",
+    "build": "npm run build -w packages/ui && npm run build -w genroapi"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "@types/node": "^20.0.0"
+  }
 }
