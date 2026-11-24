@@ -37,7 +37,7 @@ Other scripts: `npm test` (vitest), `npm run typecheck`.
 ## The flow in the UI
 
 1. Enter the Swagger/OpenAPI URL (and, for the Go backend, the service prefix), press **Load**.
-2. Tick the endpoints to generate, rename them (names must be unique across all groups, valid JS identifiers, not reserved words) and pick a Go mode per endpoint (Go backend only).
+2. Tick the endpoints to generate, rename them (names must be unique across all groups, valid JS identifiers, not reserved words) and pick a Go mode per endpoint (Go backend only). The **Group** column is editable: type any name (new or existing, suggestions are offered), or filter the table and use **Apply group** to move every shown endpoint at once. One group becomes one set of files and one Go `<Group>Router`, so this is how you combine endpoints, even from different tags, into one file set. Group names are trimmed, and spellings that differ only in case are merged. Every enabled endpoint needs a group. The preview is syntax coloured (TypeScript and Go).
 3. Choose options: Query hooks, Zod, Zustand, Backend (None / Go), Go package name, Tea import path.
 4. Set the output directories. The preview updates as you type; **Write...** is enabled only while the preview matches your current inputs.
 5. **Write...** shows a diff per file: `new`, `same` or `changed`. Changed files are only overwritten when you tick them.
