@@ -1,5 +1,5 @@
 import type { JsonSchema } from './model.js';
-import { walk, propKey, lit, type Node } from './schema.js';
+import { walk, propKey, lit, type Node, type Ctx } from './schema.js';
 
 const pad = (d: number): string => '  '.repeat(d);
 
@@ -26,6 +26,6 @@ export function renderTs(n: Node, d = 0): string {
   }
 }
 
-export function schemaToTs(s: JsonSchema, name: string): string {
-  return `export type ${name} = ${renderTs(walk(s, name))};`;
+export function schemaToTs(s: JsonSchema, name: string, ctx?: Ctx): string {
+  return `export type ${name} = ${renderTs(walk(s, name, ctx))};`;
 }

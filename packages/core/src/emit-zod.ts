@@ -1,5 +1,5 @@
 import type { JsonSchema } from './model.js';
-import { walk, hasRef, propKey, lit, type Node } from './schema.js';
+import { walk, hasRef, propKey, lit, type Node, type Ctx } from './schema.js';
 
 const pad = (d: number): string => '  '.repeat(d);
 
@@ -24,7 +24,8 @@ export function renderZod(n: Node, d = 0): string {
 }
 
 /** Emits `export const <name>Schema = ...;` (annotated with ZodTypeAny when it is self-referential). */
-export function schemaToZod(s: JsonSchema, name: string): string {
-  const node = walk(s, name);
-  return `export const ${name}Schema${hasRef(node) ? ': z.ZodTypeAny' : ''} = ${renderZod(node)};`;
+export function schemaToZod(s: JsonSchema, name: string, ctx?: Ctx, lazy = false): string {
+  const node = walk(s, name, ctx);
+  const z = renderZod(node);
+  return `export const ${name}Schema${hasRef(node) || lazy ? ': z.ZodTypeAny' : ''} = ${lazy ? `z.lazy(() => ${z})` : z};`;
 }

@@ -49,6 +49,10 @@ describe('parseSpec', () => {
     const { endpoints } = await parseSpec(load('circular.json'));
     expect(JSON.stringify(endpoints[0].response)).toContain('#/components/schemas/Node');
   }, 2000);
+  it('circular.json exposes circular components', async () => {
+    const { components } = await parseSpec(load('circular.json'));
+    expect(components).toEqual({ Node: { type: 'object', properties: { children: { type: 'array', items: { $ref: '#/components/schemas/Node' } } } } });
+  });
   it('uniqueName', () => {
     expect(uniqueName('a', new Set(['a', 'a2']))).toBe('a3');
   });

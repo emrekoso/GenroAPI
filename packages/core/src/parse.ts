@@ -27,17 +27,17 @@ function lookup(root: Obj, ref: string): any {
 }
 
 // Inline $refs except circular ones, which stay as {"$ref": ...}.
-function resolve(node: any, root: Obj, stack: string[] = []): any {
-  if (Array.isArray(node)) return node.map(n => resolve(n, root, stack));
+function resolve(node: any, root: Obj, stack: string[] = [], circ?: Set<string>): any {
+  if (Array.isArray(node)) return node.map(n => resolve(n, root, stack, circ));
   if (!node || typeof node !== 'object') return node;
   if (typeof node.$ref === 'string') {
-    if (stack.includes(node.$ref)) return { $ref: node.$ref };
+    if (stack.includes(node.$ref)) { circ?.add(node.$ref); return { $ref: node.$ref }; }
     const target = lookup(root, node.$ref);
     if (target === undefined) return { $ref: node.$ref };
-    return resolve(target, root, [...stack, node.$ref]);
+    return resolve(target, root, [...stack, node.$ref], circ);
   }
   const out: Obj = {};
-  for (const [k, v] of Object.entries(node)) out[k] = resolve(v, root, stack);
+  for (const [k, v] of Object.entries(node)) out[k] = resolve(v, root, stack, circ);
   return out;
 }
 
@@ -51,15 +51,16 @@ function pathName(method: string, path: string): string {
   return method + segs.join('');
 }
 
-export async function parseSpec(spec: object): Promise<{ title: string; endpoints: Endpoint[] }> {
+export async function parseSpec(spec: object): Promise<{ title: string; endpoints: Endpoint[]; components: Record<string, JsonSchema> }> {
   let doc = structuredClone(spec) as Obj;
   if (doc.swagger) doc = (await swagger2openapi.convertObj(doc as any, { patch: true, warnOnly: true })).openapi as Obj;
   doc = (await SwaggerParser.bundle(doc as any)) as Obj;
 
+  const circ = new Set<string>();
   const endpoints: Endpoint[] = [];
   const taken = new Set<string>();
   for (const [path, rawItem] of Object.entries<Obj>(doc.paths ?? {})) {
-    const item = resolve(rawItem, doc);
+    const item = resolve(rawItem, doc, [], circ);
     for (const method of METHODS) {
       const op = item[method];
       if (!op) continue;
@@ -89,5 +90,14 @@ export async function parseSpec(spec: object): Promise<{ title: string; endpoint
       endpoints.push({ id: `${method} ${path}`, method, path, name, group, summary: op.summary, pathParams, queryParams, body, response, isSse, goMode: isSse ? 'stream' : 'proxy', enabled: true });
     }
   }
-  return { title: doc.info?.title ?? 'API', endpoints };
+  // Circular component schemas stay as $ref in endpoints; expose them by name (nested circular refs stay $ref).
+  const components: Record<string, JsonSchema> = {};
+  const done = new Set<string>();
+  for (let todo = [...circ]; todo.length; todo = [...circ].filter(r => !done.has(r))) {
+    for (const ref of todo) {
+      done.add(ref);
+      components[ref.split('/').pop()!] = resolve(lookup(doc, ref), doc, [ref], circ) as JsonSchema;
+    }
+  }
+  return { title: doc.info?.title ?? 'API', endpoints, components };
 }

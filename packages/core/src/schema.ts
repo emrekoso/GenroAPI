@@ -15,6 +15,9 @@ export type Node =
 
 type S = Record<string, any>;
 
+/** Named component schemas: `known` are ref names that resolve to hoisted types; `used` collects the ones referenced. */
+export interface Ctx { known: Set<string>; used: Set<string> }
+
 const safe = (s: string): string => s.replace(/\*\//g, '* /');
 
 export function refName(ref: string): string {
@@ -28,11 +31,12 @@ export function refName(ref: string): string {
  * reference (the parser keeps those as `$ref`). Any other `$ref` cannot be
  * resolved (component schemas are not exposed by parseSpec) and becomes `unknown`.
  */
-export function walk(s: JsonSchema | undefined, self?: string): Node {
+export function walk(s: JsonSchema | undefined, self?: string, ctx?: Ctx): Node {
   if (!s || typeof s !== 'object') return { k: 'unknown' };
   const x = s as S;
   if (typeof x.$ref === 'string') {
     const name = refName(x.$ref);
+    if (ctx?.known.has(name)) { ctx.used.add(name); return { k: 'ref', name }; }
     return name === self ? { k: 'ref', name } : { k: 'unknown', comment: `TODO: unresolved $ref ${safe(name)}` };
   }
   let nullable = x.nullable === true;
@@ -43,15 +47,15 @@ export function walk(s: JsonSchema | undefined, self?: string): Node {
   if (Array.isArray(x.enum) && x.enum.length) return wrap({ k: 'enum', vals: x.enum as Lit[] });
   for (const key of ['oneOf', 'anyOf'] as const) {
     if (Array.isArray(x[key]) && x[key].length) {
-      const items = x[key].map((i: S) => walk(i, self));
+      const items = x[key].map((i: S) => walk(i, self, ctx));
       return wrap(items.length === 1 ? items[0] : { k: 'union', items });
     }
   }
   if (Array.isArray(x.allOf) && x.allOf.length) {
-    const items = x.allOf.map((i: S) => walk(i, self));
+    const items = x.allOf.map((i: S) => walk(i, self, ctx));
     return wrap(items.length === 1 ? items[0] : { k: 'inter', items });
   }
-  if (types.length > 1) return wrap({ k: 'union', items: types.map((t) => walk({ ...x, type: t, nullable: false }, self)) });
+  if (types.length > 1) return wrap({ k: 'union', items: types.map((t) => walk({ ...x, type: t, nullable: false }, self, ctx)) });
 
   const t = types[0] ?? (x.properties ? 'object' : x.items ? 'array' : undefined);
   switch (t) {
@@ -60,12 +64,12 @@ export function walk(s: JsonSchema | undefined, self?: string): Node {
     case 'integer': return wrap({ k: 'prim', t: 'number' });
     case 'boolean': return wrap({ k: 'prim', t: 'boolean' });
     case 'null': return { k: 'prim', t: 'null' };
-    case 'array': return wrap({ k: 'array', item: walk(x.items, self) });
+    case 'array': return wrap({ k: 'array', item: walk(x.items, self, ctx) });
     case 'object': {
       const required = new Set<string>(Array.isArray(x.required) ? x.required : []);
-      const props = Object.entries<S>(x.properties ?? {}).map(([key, v]) => ({ key, node: walk(v, self), req: required.has(key) }));
+      const props = Object.entries<S>(x.properties ?? {}).map(([key, v]) => ({ key, node: walk(v, self, ctx), req: required.has(key) }));
       let extra: Node | undefined;
-      if (x.additionalProperties && typeof x.additionalProperties === 'object') extra = walk(x.additionalProperties, self);
+      if (x.additionalProperties && typeof x.additionalProperties === 'object') extra = walk(x.additionalProperties, self, ctx);
       else if (x.additionalProperties === true || (!props.length && x.additionalProperties !== false)) extra = { k: 'unknown' };
       return wrap({ k: 'object', props, extra });
     }
