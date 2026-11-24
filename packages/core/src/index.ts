@@ -7,3 +7,6 @@ export { frontendPath, groupSlug } from './paths.js';
 export { schemaToTs } from './emit-types.js';
 export { schemaToZod } from './emit-zod.js';
 export { emitFrontend } from './emit-axios.js';
+export { emitQuery } from './emit-query.js';
+export { emitZustand } from './emit-zustand.js';
+export { plan } from './plan.js';
