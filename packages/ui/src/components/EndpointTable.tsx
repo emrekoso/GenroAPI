@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { groupNames } from '../groups';
 import type { Endpoint, GoMode } from '@genroapi/core';
 // Deep import: the package root pulls in Node-only parser code that must not be bundled into the UI.
 import { RESERVED_WORDS } from '@genroapi/core/src/reserved';
@@ -31,18 +32,22 @@ export function nameErrors(endpoints: Endpoint[]): Record<string, string> {
 }
 
 interface Props {
-  endpoints: Endpoint[]; showGo: boolean; errors: Record<string, string>;
+  endpoints: Endpoint[]; showGo: boolean; errors: Record<string, string>; groupErrors: Record<string, string>;
   onChange(id: string, patch: Partial<Endpoint>): void;
   onEnableAll(ids: string[], enabled: boolean): void;
+  onGroupAll(ids: string[], group: string): void;
 }
 
-export function EndpointTable({ endpoints, showGo, errors, onChange, onEnableAll }: Props) {
+export function EndpointTable({ endpoints, showGo, errors, groupErrors, onChange, onEnableAll, onGroupAll }: Props) {
   const [filter, setFilter] = useState('');
+  const [bulkGroup, setBulkGroup] = useState('');
+  const groups = useMemo(() => groupNames(endpoints), [endpoints]);
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase();
     return q ? endpoints.filter(e => [e.name, e.path, e.group].some(s => s.toLowerCase().includes(q))) : endpoints;
   }, [endpoints, filter]);
   const ids = shown.map(e => e.id);
+  const applyGroup = () => { onGroupAll(ids, bulkGroup); setBulkGroup(''); };
 
   return (
     <section className="card">
@@ -54,6 +59,14 @@ export function EndpointTable({ endpoints, showGo, errors, onChange, onEnableAll
         <button type="button" onClick={() => onEnableAll(ids, true)}>Select all</button>
         <button type="button" onClick={() => onEnableAll(ids, false)}>Select none</button>
       </div>
+      <div className="row bulk">
+        <label className="field grow"><span className="sr-only">Move shown endpoints to group</span>
+          <input list="group-options" value={bulkGroup} onChange={e => setBulkGroup(e.target.value)} aria-label="Move shown endpoints to group"
+            placeholder={`Move the ${shown.length} shown endpoint${shown.length === 1 ? '' : 's'} to a group (new or existing)…`} />
+        </label>
+        <button type="button" disabled={bulkGroup.trim() === '' || ids.length === 0} onClick={applyGroup}>Apply group</button>
+      </div>
+      <datalist id="group-options">{groups.map(g => <option key={g} value={g} />)}</datalist>
       <div className="table-wrap">
         <table>
           <thead>
@@ -73,7 +86,10 @@ export function EndpointTable({ endpoints, showGo, errors, onChange, onEnableAll
                     <input value={e.name} aria-label={`Name of ${key}`} aria-invalid={!!err} onChange={ev => onChange(e.id, { name: ev.target.value })} />
                     {err && <div className="err" role="note">{err}</div>}
                   </td>
-                  <td>{e.group}</td>
+                  <td>
+                    <input list="group-options" value={e.group} aria-label={`Group of ${key}`} aria-invalid={!!groupErrors[e.id]} onChange={ev => onChange(e.id, { group: ev.target.value })} />
+                    {groupErrors[e.id] && <div className="err" role="note">{groupErrors[e.id]}</div>}
+                  </td>
                   <td><span className={`method m-${e.method}`}>{e.method.toUpperCase()}</span> <code>{e.path}</code></td>
                   {showGo && (
                     <td className="gomode">

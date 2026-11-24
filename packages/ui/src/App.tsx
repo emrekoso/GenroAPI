@@ -3,6 +3,7 @@ import type { Endpoint, GenOptions, GeneratedFile } from '@genroapi/core';
 import * as api from './api';
 import { SpecForm, prefixValid } from './components/SpecForm';
 import { EndpointTable, nameErrors } from './components/EndpointTable';
+import { groupErrors as findGroupErrors, normalizeGroups } from './groups';
 import { OptionsPanel, goOptionProblems } from './components/OptionsPanel';
 import { PreviewTabs } from './components/PreviewTabs';
 import { WriteDialog } from './components/WriteDialog';
@@ -34,11 +35,13 @@ export default function App() {
   const options: GenOptions = useMemo(() => ({ ...opts, servicePrefix: prefix }), [opts, prefix]);
   const errors = useMemo(() => nameErrors(endpoints), [endpoints]);
   const go = options.backend === 'go';
+  const groupErrs = useMemo(() => findGroupErrors(endpoints), [endpoints]);
   const nameBlocked = Object.keys(errors).length > 0;
+  const groupBlocked = Object.keys(groupErrs).length > 0;
   const goProblems = goOptionProblems(options);
   const settingsBlocked = !prefixValid(prefix, go) || Object.keys(goProblems).length > 0;
-  const blocked = nameBlocked || settingsBlocked;
-  const blocker = nameBlocked ? 'Fix the endpoint name errors to refresh the preview.' : settingsBlocked ? 'Fix the highlighted settings to refresh the preview.' : null;
+  const blocked = nameBlocked || groupBlocked || settingsBlocked;
+  const blocker = nameBlocked ? 'Fix the endpoint name errors to refresh the preview.' : groupBlocked ? 'Every enabled endpoint needs a group.' : settingsBlocked ? 'Fix the highlighted settings to refresh the preview.' : null;
   const showError = useCallback((m: string) => setError(m), []);
 
   // Load persisted config once; failures are silent.
@@ -78,7 +81,7 @@ export default function App() {
     const ctl = new AbortController();
     const t = setTimeout(() => {
       setPreviewing(true);
-      api.preview(endpoints, options, components, ctl.signal)
+      api.preview(normalizeGroups(endpoints), options, components, ctl.signal)
         .then(r => { setFiles(r.files); setShown({ e: endpoints, o: options, c: components }); setPreviewing(false); })
         .catch(e => { if (ctl.signal.aborted) return; setPreviewing(false); setError(e.message); });
     }, PREVIEW_DELAY);
@@ -97,6 +100,7 @@ export default function App() {
   };
 
   const patch = (id: string, p: Partial<Endpoint>) => setEndpoints(es => es.map(e => (e.id === id ? { ...e, ...p } : e)));
+  const groupAll = (ids: string[], group: string) => { const s = new Set(ids); setEndpoints(es => es.map(e => (s.has(e.id) ? { ...e, group } : e))); };
   const enableAll = (ids: string[], enabled: boolean) => { const s = new Set(ids); setEndpoints(es => es.map(e => (s.has(e.id) ? { ...e, enabled } : e))); };
 
   const dirs: api.OutDirs = go ? { frontend: outDirs.frontend.trim(), backend: (outDirs.backend ?? '').trim() } : { frontend: outDirs.frontend.trim() };
@@ -121,7 +125,7 @@ export default function App() {
       <OptionsPanel options={options} outDirs={outDirs} cwd={cwd}
         onOptions={o => { const { servicePrefix: _p, ...rest } = o; setOpts(rest); }} onOutDirs={setOutDirs} />
       {loaded && <>
-        <EndpointTable endpoints={endpoints} showGo={go} errors={errors} onChange={patch} onEnableAll={enableAll} />
+        <EndpointTable endpoints={endpoints} showGo={go} errors={errors} groupErrors={groupErrs} onChange={patch} onEnableAll={enableAll} onGroupAll={groupAll} />
         <PreviewTabs files={files} loading={previewing} blocker={blocker} stale={stale} />
         <div className="row end">
           <button type="button" className="primary" disabled={!canWrite} onClick={() => setWriting(files)}>Write…</button>

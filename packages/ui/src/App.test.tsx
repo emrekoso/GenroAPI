@@ -347,4 +347,93 @@ describe('UI', () => {
       expect(screen.queryByRole('alert')).toBeNull();
     });
   });
+
+  describe('groups', () => {
+    const groupOf = (body: any, id: string) => body.endpoints.find((e: any) => e.id === id).group;
+
+    it('lets the user type a group per endpoint; the preview gets the normalised value', async () => {
+      const user = await load();
+      await waitPreview(1);
+      const n = previews().length;
+      const input = screen.getByLabelText('Group of GET /pets');
+      expect(input).toHaveValue('pets');
+      await user.clear(input);
+      await user.type(input, '  My   api ');
+      await waitPreview(n + 1);
+      expect(groupOf(lastPreview(), 'e1')).toBe('My api');
+      expect(groupOf(lastPreview(), 'e2')).toBe('pets');
+    });
+
+    it('merges groups that differ only in case so they do not become two files', async () => {
+      const user = await load();
+      await waitPreview(1);
+      const n = previews().length;
+      const input = screen.getByLabelText('Group of POST /pets');
+      await user.clear(input);
+      await user.type(input, 'PETS');
+      await waitPreview(n + 1);
+      expect(groupOf(lastPreview(), 'e1')).toBe('pets');
+      expect(groupOf(lastPreview(), 'e2')).toBe('pets');
+    });
+
+    it('blocks the preview and writing while an enabled endpoint has an empty group', async () => {
+      const user = await load();
+      await waitPreview(1);
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Write…' })).toBeDisabled(), { timeout: 100 }).catch(() => {});
+      await user.type(screen.getByLabelText('Frontend output dir'), 'src/api');
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Write…' })).toBeEnabled(), { timeout: 2000 });
+      const n = previews().length;
+      await user.clear(screen.getByLabelText('Group of GET /pets'));
+      expect(screen.getAllByText('Group is required')).toHaveLength(1);
+      expect(screen.getByText('Every enabled endpoint needs a group.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Write…' })).toBeDisabled();
+      await new Promise(r => setTimeout(r, 600));
+      expect(previews().length).toBe(n);
+    });
+
+    it('suggests the existing groups', async () => {
+      await load();
+      const options = [...document.querySelectorAll('datalist#group-options option')].map(o => o.getAttribute('value'));
+      expect(options).toEqual(['pets']);
+    });
+
+    it('moves only the endpoints currently shown by the filter to a typed group', async () => {
+      const user = await load();
+      await waitPreview(1);
+      const n = previews().length;
+      await user.type(screen.getByLabelText('Filter endpoints'), 'createPet');
+      const apply = screen.getByRole('button', { name: 'Apply group' });
+      expect(apply).toBeDisabled();
+      await user.type(screen.getByLabelText('Move shown endpoints to group'), 'orders');
+      expect(apply).toBeEnabled();
+      await user.click(apply);
+      await user.clear(screen.getByLabelText('Filter endpoints'));
+      await waitPreview(n + 1);
+      expect(groupOf(lastPreview(), 'e2')).toBe('orders');
+      expect(groupOf(lastPreview(), 'e1')).toBe('pets');
+    });
+  });
+
+  describe('preview colouring', () => {
+    it('colours the previewed file while keeping its text intact, and switches language per file', async () => {
+      const user = await load();
+      await waitPreview(1);
+      const panel = await screen.findByRole('tabpanel');
+      expect(panel.textContent).toContain('export const a = 1;');
+      expect(panel.querySelector('.tok-keyword')?.textContent).toBe('export');
+      expect(panel.querySelector('.tok-number')?.textContent).toBe('1');
+      await user.click(screen.getByRole('tab', { name: 'pets.go' }));
+      const goPanel = screen.getByRole('tabpanel');
+      expect([...goPanel.querySelectorAll('.tok-keyword')].map(n => n.textContent)).toEqual(['package', 'func']);
+      expect(goPanel.querySelector('pre')?.textContent).toBe(GO.content);
+    });
+
+    it('renders spec-derived markup as text, never as HTML', async () => {
+      routes['POST /api/preview'] = () => ({ json: { files: [{ path: 'x.ts', content: 'const a = "<img src=x onerror=alert(1)>";', kind: 'frontend' }] } });
+      await load();
+      const panel = await screen.findByRole('tabpanel');
+      expect(panel.querySelector('img')).toBeNull();
+      expect(panel.textContent).toContain('<img src=x onerror=alert(1)>');
+    });
+  });
 });
