@@ -114,11 +114,14 @@ describe('hardening', () => {
     const ep = { id: 'getPets', method: 'get', path: '/pets/{id}', name: 'getPets', group: 'Pets & Co', summary: 's',
       pathParams: [{ name: 'id', ident: 'id', required: true, schema: { type: 'string' } }], queryParams: [],
       isSse: false, goMode: 'proxy', enabled: true };
-    const eps = [ep, { ...ep, id: 'x', name: 'x', group: 'other_group', method: 'post', body: { type: 'object' } }] as any;
+    const eps = [ep, { ...ep, id: 'x', name: 'x', group: 'other_group', method: 'post', body: { type: 'object' } },
+      { ...ep, id: 'l1', name: 'l1', group: 'L'.repeat(300) }, { ...ep, id: 'l2', name: 'l2', group: 'L'.repeat(299) + 'M' }, { ...ep, id: 'l3', name: 'l3', group: '1abc' }, { ...ep, id: 'l4', name: 'l4', group: 'api1abc' }] as any;
     const files = plan(eps, { servicePrefix: '/api', query: true, zod: true, zustand: true, backend: 'go', go: { package: 'p', teaImport: 't' } }, { Pet: { type: 'object' } });
     expect(files.some(x => x.kind === 'backend')).toBe(true);
     expect(files.length).toBeGreaterThan(4);
     for (const x of files) expect(isAllowedName(x.path), x.path).toBe(true);
+    expect(Math.max(...files.map(x => x.path.length))).toBeLessThan(100);
+    expect(new Set(files.map(x => x.path)).size).toBe(files.length);
   });
   it('allowlist rejection writes nothing', async () => {
     await expect(writeFiles([f('good.gen.ts', 'g'), f('README.md', 'x')], { frontend: fe }, [], root)).rejects.toBeInstanceOf(WriterError);

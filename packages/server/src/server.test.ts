@@ -19,6 +19,18 @@ const ep = {
   isSse: false, goMode: 'proxy', enabled: true,
 };
 
+describe('info', () => {
+  it('GET /api/info returns the absolute working directory the server resolves output dirs against', async () => {
+    const r = await app.inject({ method: 'GET', url: '/api/info', headers: { host: 'localhost:4000' } });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ cwd });
+  });
+  it('/api/info is subject to the Host check', async () => {
+    const r = await app.inject({ method: 'GET', url: '/api/info', headers: { host: 'evil.com' } });
+    expect(r.statusCode).toBe(403);
+  });
+});
+
 describe('security', () => {
   it('403 on foreign Host header', async () => {
     const r = await app.inject({ method: 'GET', url: '/api/config', headers: { host: 'evil.com' } });
@@ -216,5 +228,85 @@ describe('/api/config', () => {
     for (const body of ['[1]', '"s"', 'null', '5']) {
       expect((await app.inject({ method: 'PUT', url: '/api/config', payload: body, headers: h })).statusCode).toBe(400);
     }
+  });
+});
+
+describe('Y1 /api/spec with YAML and HTML', () => {
+  const serve = async (body: string, type: string, fn: (url: string) => Promise<void>) => {
+    const srv = http.createServer((_q, s) => { s.setHeader('content-type', type); s.end(body); });
+    await new Promise<void>(r => srv.listen(0, '127.0.0.1', r));
+    try { await fn(`http://127.0.0.1:${(srv.address() as any).port}/swagger/`); } finally { srv.closeAllConnections(); srv.close(); }
+  };
+  const YAML = `openapi: 3.0.3\ninfo: {title: Y, version: "1"}\npaths:\n  /a:\n    get:\n      operationId: getA\n      responses:\n        "200": {description: ok}\n`;
+  it('YAML -> 200 with endpoints', async () => {
+    await serve(YAML, 'application/yaml', async url => {
+      const r = await post('/api/spec', { url });
+      expect(r.statusCode).toBe(200);
+      expect(r.json().endpoints.map((e: any) => e.name)).toEqual(['getA']);
+    });
+  });
+  it('HTML, invalid JSON, invalid YAML -> 502 with a clear message (not 500)', async () => {
+    await serve('<!doctype html><html></html>', 'text/html', async url => {
+      const r = await post('/api/spec', { url });
+      expect(r.statusCode).toBe(502);
+      expect(r.json().error).toContain(`Got an HTML page from ${url}, not an OpenAPI document.`);
+    });
+    await serve('{"openapi": ', 'application/json', async url => {
+      const r = await post('/api/spec', { url });
+      expect(r.statusCode).toBe(502);
+      expect(r.json().error).toContain(url);
+    });
+    await serve('a: [unclosed\n  b: : :', 'application/yaml', async url => {
+      const r = await post('/api/spec', { url });
+      expect(r.statusCode).toBe(502);
+      expect(r.json().error).toContain('not valid JSON or YAML');
+    });
+  });
+  it('a body that parses but is not a spec -> 502, not 500', async () => {
+    await serve('{"hello": 1}', 'application/json', async url => {
+      const r = await post('/api/spec', { url });
+      expect(r.statusCode).toBe(502);
+    });
+  });
+});
+
+describe('M5/I2 input validation is a 400, never a 500', () => {
+  const bad = async (endpoints: unknown[], opts: unknown = options) => (await post('/api/preview', { endpoints, options: opts })).statusCode;
+  it.each([
+    ['get-users'], ['delete'], ['1abc'], ['a b'], [''], ['class'], ['a.b'],
+  ])('rejects endpoint name %j', async name => { expect(await bad([{ ...ep, name }])).toBe(400); });
+  it('allows odd-but-valid and disabled-invalid names; rejects cross-group duplicates', async () => {
+    expect(await bad([{ ...ep, name: '$x_1' }])).toBe(200);
+    expect(await bad([{ ...ep, name: 'get-users', enabled: false }])).toBe(200);
+    expect(await bad([{ ...ep, name: 'dup', group: 'a' }, { ...ep, name: 'dup', group: 'b' }])).toBe(400);
+    expect(await bad([{ ...ep, name: 'dup', group: 'a' }, { ...ep, name: 'dup', group: 'b', enabled: false }])).toBe(200);
+  });
+  it.each([
+    ['pathParams element not object', { pathParams: ['x'] }],
+    ['pathParams missing ident', { pathParams: [{ name: 'id', required: true }] }],
+    ['pathParams ident not an identifier', { pathParams: [{ name: 'id', ident: 'a b', required: true }] }],
+    ['pathParams required not boolean', { pathParams: [{ name: 'id', ident: 'id', required: 'yes' }] }],
+    ['queryParams name not string', { queryParams: [{ name: 5, ident: 'q', required: false }] }],
+    ['goMode not in enum', { goMode: 'rocket' }],
+    ['enabled not boolean', { enabled: 'yes' }],
+    ['cacheTtl not string', { cacheTtl: 5 }],
+    ['method not in enum', { method: 'trace' }],
+    ['isSse not boolean', { isSse: 1 }],
+  ])('rejects %s', async (_n, patch) => { expect(await bad([{ ...ep, ...patch }])).toBe(400); });
+  it('accepts well-formed params and cacheTtl', async () => {
+    expect(await bad([{ ...ep, goMode: 'cache', cacheTtl: '5m', pathParams: [{ name: 'id', ident: 'id', required: true, schema: {} }], queryParams: [{ name: 'q', ident: 'q', required: false, schema: {} }] }])).toBe(200);
+  });
+  it.each([
+    ['package with a dash', { go: { package: 'my-pkg', teaImport: 't' } }],
+    ['package uppercase', { go: { package: 'Routers', teaImport: 't' } }],
+    ['empty package', { go: { package: '', teaImport: 't' } }],
+    ['empty teaImport', { go: { package: 'p', teaImport: '' } }],
+    ['teaImport with quote', { go: { package: 'p', teaImport: 'a"b' } }],
+    ['teaImport with newline', { go: { package: 'p', teaImport: 'a\nb' } }],
+    ['teaImport with backslash', { go: { package: 'p', teaImport: 'a\\b' } }],
+  ])('go backend rejects %s', async (_n, patch) => { expect(await bad([ep], { ...options, backend: 'go', ...patch })).toBe(400); });
+  it('go.* is only checked for the go backend; valid go options pass', async () => {
+    expect(await bad([ep], { ...options, go: { package: '', teaImport: '' } })).toBe(200);
+    expect(await bad([ep], { ...options, backend: 'go', go: { package: 'routers', teaImport: 'teadash/functions/Tea' } })).toBe(200);
   });
 });
