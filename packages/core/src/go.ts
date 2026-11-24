@@ -12,10 +12,26 @@ const HELPER: Record<Exclude<GoMode, 'none' | 'cache'>, string> = {
 
 const q = (s: string): string => JSON.stringify(s);
 
+/** Name of the generated router function (without the `Router` suffix), e.g. group `1abc` -> `Api1abc`. */
+export function routerFuncName(group: string): string {
+  const fn = toIdent(group).replace(/^_+/, '').replace(/^./, (c) => c.toUpperCase());
+  return !fn || /^[0-9]/.test(fn) ? 'Api' + fn : fn;
+}
+
+const UNITS: Record<string, string> = { ms: 'Millisecond', s: 'Second', m: 'Minute', h: 'Hour' };
+
+/** TTL argument for HandleProxyWithCache: `5m` shorthand, a raw Go expression, or the package-level `CacheTTL`. */
+function ttlExpr(raw: string | undefined): { expr: string; time: boolean; dflt: boolean } {
+  const t = (raw ?? '').trim();
+  if (!t) return { expr: 'CacheTTL', time: false, dflt: true };
+  const m = /^(\d+)(ms|s|m|h)$/.exec(t);
+  // gofmt prints binary expressions in call arguments without spaces
+  if (m) return { expr: `${m[1]}*time.${UNITS[m[2]]}`, time: true, dflt: false };
+  return { expr: t, time: /\btime\./.test(t), dflt: false };
+}
+
 export function emitGo(group: string, eps: Endpoint[], o: GenOptions): GeneratedFile {
-  const ident = toIdent(group);
-  let fn = ident.replace(/^_+/, '').replace(/^./, (c) => c.toUpperCase());
-  if (!fn || /^[0-9]/.test(fn)) fn = 'Api' + fn;
+  const fn = routerFuncName(group);
   const fileBase = groupSlug(group);
   const active = eps
     .filter((e) => e.enabled && e.goMode !== 'none')
@@ -26,10 +42,10 @@ export function emitGo(group: string, eps: Endpoint[], o: GenOptions): Generated
   const lines = active.map((e) => {
     const args = `${q(frontendPath(e))}, ${q(resolveUpstream(e.path, o.servicePrefix))}`;
     if (e.goMode === 'cache') {
-      const ttl = e.cacheTtl || 'CacheTTL';
-      if (!e.cacheTtl) usesDefaultTtl = true;
-      else if (ttl.includes('time.')) needsTime = true;
-      return `\trouter.HandleProxyWithCache(${args}, ${ttl})`;
+      const ttl = ttlExpr(e.cacheTtl);
+      if (ttl.dflt) usesDefaultTtl = true;
+      if (ttl.time) needsTime = true;
+      return `\trouter.HandleProxyWithCache(${args}, ${ttl.expr})`;
     }
     return `\trouter.${HELPER[e.goMode as keyof typeof HELPER]}(${args})`;
   });

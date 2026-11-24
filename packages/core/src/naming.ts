@@ -1,5 +1,6 @@
-const RESERVED = new Set(('break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof new null return super switch this throw true try typeof var void while with ' +
-  'implements interface let package private protected public static yield await async of type abstract any as boolean declare from get set module namespace never number object readonly require string symbol undefined unknown arguments eval').split(' '));
+import { RESERVED_WORDS } from './reserved.js';
+
+const RESERVED = new Set(RESERVED_WORDS);
 
 export function toIdent(s: string): string {
   const parts = s.split(/[^A-Za-z0-9]+/).filter(Boolean);

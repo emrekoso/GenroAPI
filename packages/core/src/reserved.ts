@@ -1,0 +1,3 @@
+/** JS/TS words that cannot be used as generated identifiers (shared with the UI's endpoint-name validation). */
+export const RESERVED_WORDS: readonly string[] = ('break case catch class const continue debugger default delete do else enum export extends false finally for function if import in instanceof new null return super switch this throw true try typeof var void while with ' +
+  'implements interface let package private protected public static yield await async of type abstract any as boolean declare from get set module namespace never number object readonly require string symbol undefined unknown arguments eval').split(' ');
