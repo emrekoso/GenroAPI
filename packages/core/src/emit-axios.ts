@@ -26,6 +26,18 @@ function urlOf(e: Endpoint, o: GenOptions, idents: Map<string, string>): string 
 }
 const esc = (s: string): string => s.replace(/\\/g, '\\\\').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
 
+/** Deduped argument identifiers of an endpoint's path params, exactly as used in the generated service function. */
+export function pathIdents(e: Endpoint): Map<string, string> {
+  const taken = new Set(RESERVED);
+  const idents = new Map<string, string>();
+  for (const p of e.pathParams) {
+    const id = uniqueName(p.ident, taken);
+    taken.add(id);
+    idents.set(p.name, id);
+  }
+  return idents;
+}
+
 export function emitFrontend(group: string, eps: Endpoint[], o: GenOptions, components: Record<string, JsonSchema> = {}): GeneratedFile[] {
   const byRef = new Map(Object.entries(components).map(([k, v]) => [refName(`#/${k}`), v]));
   const ctx: Ctx = { known: new Set(byRef.keys()), used: new Set() };
@@ -55,13 +67,7 @@ export function emitFrontend(group: string, eps: Endpoint[], o: GenOptions, comp
 
     const useZod = o.zod && !!e.response;
     const doc = e.summary ? `/** ${e.summary.replace(/\*\//g, '* /').replace(/\s+/g, ' ')} */\n` : '';
-    const taken = new Set(RESERVED);
-    const idents = new Map<string, string>();
-    for (const p of e.pathParams) {
-      const id = uniqueName(p.ident, taken);
-      taken.add(id);
-      idents.set(p.name, id);
-    }
+    const idents = pathIdents(e);
     const url = urlOf(e, o, idents);
     const pathArgs = e.pathParams.map((p) => `${idents.get(p.name)}: ${renderTs(walk(p.schema))}`);
     if (e.response) typeImports.add(respT);
