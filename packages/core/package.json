@@ -1,0 +1,14 @@
+{
+  "name": "@genroapi/core",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@apidevtools/swagger-parser": "^13.1.0",
+    "swagger2openapi": "^7.0.8"
+  },
+  "devDependencies": {
+    "@types/swagger2openapi": "^7.0.4"
+  }
+}
