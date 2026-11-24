@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import type { GeneratedFile } from '@genroapi/core';
+import { highlight, languageOf } from '../highlight';
 
 interface Props { files: GeneratedFile[]; loading: boolean; blocker: string | null; stale: boolean }
 
@@ -8,6 +9,8 @@ export function PreviewTabs({ files, loading, blocker, stale }: Props) {
   const [copied, setCopied] = useState(false);
   const idx = Math.min(sel, Math.max(files.length - 1, 0));
   const file = files[idx];
+  // Rendered as React text nodes inside spans (never as HTML), since the content derives from a third-party spec.
+  const tokens = useMemo(() => (file ? highlight(file.content, languageOf(file.path)) : []), [file]);
   const copy = async () => {
     try { await navigator.clipboard.writeText(file.content); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch { /* clipboard unavailable */ }
   };
@@ -25,7 +28,7 @@ export function PreviewTabs({ files, loading, blocker, stale }: Props) {
         </div>
         <div role="tabpanel" className="panel">
           <button type="button" className="copy" onClick={copy}>{copied ? 'Copied' : 'Copy'}</button>
-          <pre>{file.content}</pre>
+          <pre><code>{tokens.map((t, i) => (t.kind ? <span key={i} className={`tok-${t.kind}`}>{t.text}</span> : t.text))}</code></pre>
         </div>
       </>}
     </section>
