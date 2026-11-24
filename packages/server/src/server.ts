@@ -19,6 +19,16 @@ function validOptions(o: unknown): GenOptions {
   return o as unknown as GenOptions;
 }
 
+function validEndpoints(v: unknown): Endpoint[] {
+  if (!Array.isArray(v)) return bad('endpoints must be an array');
+  for (const e of v) {
+    if (!isObj(e)) return bad('each endpoint must be an object');
+    for (const k of ['name', 'path', 'method', 'group']) if (typeof e[k] !== 'string') bad(`endpoint.${k} must be a string`);
+    for (const k of ['pathParams', 'queryParams']) if (!Array.isArray(e[k])) bad(`endpoint.${k} must be an array`);
+  }
+  return v as Endpoint[];
+}
+
 function validFiles(v: unknown): GeneratedFile[] {
   if (!Array.isArray(v)) return bad('files must be an array');
   for (const f of v) if (!isObj(f) || typeof f.path !== 'string' || typeof f.content !== 'string' || (f.kind !== 'frontend' && f.kind !== 'backend')) bad('each file must be {path, content, kind}');
@@ -31,9 +41,9 @@ function validOutDirs(v: unknown): OutDirs {
   return v as unknown as OutDirs;
 }
 
-export function buildServer(opts: ServerOpts = {}): FastifyInstance & { expectedPort?: number } {
+export function buildServer(opts: ServerOpts = {}): FastifyInstance {
   const cwd = opts.cwd ?? process.cwd();
-  const app: FastifyInstance & { expectedPort?: number } = Fastify({ logger: false, bodyLimit: 32 * 1024 * 1024 });
+  const app: FastifyInstance = Fastify({ logger: false, bodyLimit: 32 * 1024 * 1024 });
 
   // Only JSON bodies are parsed; any other content type is rejected with 415 (forces a CORS preflight for cross-site pages).
   app.removeAllContentTypeParsers();
@@ -46,7 +56,7 @@ export function buildServer(opts: ServerOpts = {}): FastifyInstance & { expected
   app.addHook('onRequest', async (req, reply) => {
     const host = req.headers.host ?? '';
     const m = /^(localhost|127\.0\.0\.1)(?::(\d+))?$/.exec(host);
-    if (!m || (app.expectedPort !== undefined && Number(m[2] ?? 80) !== app.expectedPort))
+    if (!m || (req.socket.localPort !== undefined && Number(m[2] ?? 80) !== req.socket.localPort))
       return reply.code(403).send({ error: 'Forbidden host' });
     const origin = req.headers.origin;
     if (origin !== undefined && origin !== `http://${host}`) return reply.code(403).send({ error: 'Forbidden origin' });
@@ -68,10 +78,10 @@ export function buildServer(opts: ServerOpts = {}): FastifyInstance & { expected
   app.post('/api/preview', async req => {
     const b = req.body;
     if (!isObj(b)) return bad('body must be an object');
-    if (!Array.isArray(b.endpoints)) bad('endpoints must be an array');
+    const endpoints = validEndpoints(b.endpoints);
     const options = validOptions(b.options);
     if (b.components !== undefined && !isObj(b.components)) bad('components must be an object');
-    return { files: plan(b.endpoints as Endpoint[], options, b.components as Record<string, JsonSchema> | undefined) };
+    return { files: plan(endpoints, options, b.components as Record<string, JsonSchema> | undefined) };
   });
 
   app.post('/api/diff', async req => {
@@ -103,6 +113,5 @@ export async function startServer(port = 0, opts: ServerOpts = {}): Promise<{ ur
   const app = buildServer(opts);
   await app.listen({ host: '127.0.0.1', port });
   const actual = (app.server.address() as { port: number }).port;
-  app.expectedPort = actual;
   return { url: `http://127.0.0.1:${actual}`, close: () => app.close() };
 }

@@ -13,7 +13,11 @@ export class WriterError extends Error {}
 
 interface Target { file: GeneratedFile; target: string; status: Status; old?: string }
 
-const inside = (dir: string, p: string) => { const r = relative(dir, p); return r !== '' && !r.startsWith('..') && !isAbsolute(r); };
+export const inside = (dir: string, p: string) => { const r = relative(dir, p); return r !== '' && r !== '..' && !r.startsWith('..' + sep) && !isAbsolute(r); };
+
+/** Every core emitter produces `<slug>.<kind>.gen.ts` / `<slug>.gen.go`; anything else is refused. */
+const NAME_RE = /^[A-Za-z0-9_.-]{1,200}\.gen\.(ts|go)$/;
+export const isAllowedName = (n: string) => NAME_RE.test(n) && !n.startsWith('..') && n !== '.gen.ts' && n !== '.gen.go';
 
 /** realpath of the deepest existing ancestor, with the not-yet-existing remainder appended. */
 async function canonicalDir(dir: string): Promise<string> {
@@ -31,13 +35,21 @@ async function canonicalDir(dir: string): Promise<string> {
 }
 
 function checkName(name: unknown): string {
-  if (typeof name !== 'string' || name === '' || name === '.' || name === '..' || name.includes('/') || name.includes('\\') || name.includes('\0') || isAbsolute(name))
-    throw new WriterError(`Invalid file name ${JSON.stringify(name)}: must be a plain file name`);
+  if (typeof name !== 'string' || !isAllowedName(name))
+    throw new WriterError(`Invalid file name ${JSON.stringify(typeof name === 'string' ? name.slice(0, 80) : name)}: must be a plain *.gen.ts / *.gen.go file name`);
   return name;
 }
 
 /** Validate every file first (names, outDirs, symlink escapes), then classify against disk. Throws before any write. */
 async function resolveTargets(files: GeneratedFile[], outDirs: OutDirs, cwd: string): Promise<Target[]> {
+  try { return await resolveTargetsRaw(files, outDirs, cwd); }
+  catch (e) {
+    if (e instanceof WriterError) throw e;
+    throw new WriterError(`Cannot use output location: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+async function resolveTargetsRaw(files: GeneratedFile[], outDirs: OutDirs, cwd: string): Promise<Target[]> {
   const dirs = new Map<string, string>();
   const dirFor = async (kind: 'frontend' | 'backend') => {
     const raw = outDirs[kind];
@@ -55,8 +67,9 @@ async function resolveTargets(files: GeneratedFile[], outDirs: OutDirs, cwd: str
     const dir = await dirFor(file.kind);
     const target = join(dir, name);
     if (!inside(dir, target)) throw new WriterError(`${name} resolves outside the output directory`);
-    if (seen.has(target)) throw new WriterError(`Duplicate file ${name}`);
-    seen.add(target);
+    const key = target.normalize('NFC').toLowerCase();
+    if (seen.has(key)) throw new WriterError(`Duplicate file ${name}`);
+    seen.add(key);
     let status: Status = 'new';
     let old: string | undefined;
     let st;
@@ -93,7 +106,7 @@ export async function writeFiles(files: GeneratedFile[], outDirs: OutDirs, overw
     await mkdir(dirname(target), { recursive: true });
     const tmp = `${target}.${randomBytes(6).toString('hex')}.tmp`;
     try { await writeFile(tmp, file.content, { flag: 'wx' }); await rename(tmp, target); }
-    catch (e) { await rm(tmp, { force: true }); throw e; }
+    catch (e) { await rm(tmp, { force: true }).catch(() => {}); throw e; }
     written.push(file.path);
   }
   return { written, skipped };
