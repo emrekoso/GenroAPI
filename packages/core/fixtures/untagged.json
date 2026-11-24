@@ -1,0 +1,4 @@
+{"openapi":"3.0.0","info":{"title":"U","version":"1"},"paths":{"/":{"get":{"responses":{"200":{"description":"ok"}}}},
+"/health/check":{"get":{"responses":{"200":{"description":"ok"}}}},
+"/dup1":{"get":{"operationId":"getX","responses":{"200":{"description":"ok"}}}},
+"/dup2":{"get":{"operationId":"getX","responses":{"200":{"description":"ok"}}}}}}

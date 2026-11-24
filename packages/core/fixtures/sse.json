@@ -1,0 +1,2 @@
+{"openapi":"3.0.0","info":{"title":"S","version":"1"},"paths":{"/events":{"get":{"operationId":"streamEvents","tags":["Ev"],
+"responses":{"200":{"description":"ok","content":{"text/event-stream":{"schema":{"type":"string"}}}}}}}}}

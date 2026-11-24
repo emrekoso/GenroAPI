@@ -1,0 +1,8 @@
+{"openapi":"3.0.0","info":{"title":"Plat API","version":"1"},"paths":{
+"/entity/platforms":{"get":{"operationId":"getPlatforms","tags":["Entity"],"summary":"List platforms",
+"parameters":[{"name":"limit","in":"query","required":false,"schema":{"type":"integer"}}],
+"responses":{"200":{"description":"ok","content":{"application/json":{"schema":{"type":"array","items":{"$ref":"#/components/schemas/Platform"}}}}}}}},
+"/entity/platforms/{user-id}":{"post":{"tags":["Entity"],"parameters":[{"name":"user-id","in":"path","required":true,"schema":{"type":"string"}}],
+"requestBody":{"content":{"application/json":{"schema":{"$ref":"#/components/schemas/Platform"}}}},
+"responses":{"204":{"description":"none"}}}}},
+"components":{"schemas":{"Platform":{"type":"object","properties":{"id":{"type":"string"}}}}}}
