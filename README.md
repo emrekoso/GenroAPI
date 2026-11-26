@@ -14,7 +14,16 @@ UI page, the tool says so and suggests the spec URL when it can find one.
 
 Node **>= 22.19** (the CLI checks this on start and exits with a message on older versions; use nvm/fnm to switch).
 
-## Install, build, run
+## Quick start
+
+```bash
+npx genroapi            # run once, no install
+# or: npm install -g genroapi && genroapi
+```
+
+The tool opens in your browser. Everything runs on your machine; files are written only where you point it.
+
+## Install from source (build and run)
 
 ```bash
 npm install
