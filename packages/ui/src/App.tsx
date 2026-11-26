@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Endpoint, GenOptions, GeneratedFile } from '@genroapi/core';
 import * as api from './api';
 import { SpecForm, prefixValid } from './components/SpecForm';
-import { EndpointTable, nameErrors } from './components/EndpointTable';
+import { nameErrors } from './components/EndpointTable';
+import { Board } from './components/Board';
+import { SaveBar } from './components/SaveBar';
+import { groupModel } from './groupViz';
 import { groupErrors as findGroupErrors, normalizeGroups } from './groups';
 import { OptionsPanel, goOptionProblems } from './components/OptionsPanel';
 import { PreviewTabs } from './components/PreviewTabs';
@@ -14,6 +17,16 @@ const DEFAULT_OPTIONS: GenOptions = {
 };
 const PREVIEW_DELAY = 300;
 const SAVE_DELAY = 500;
+
+/** Smoothly scroll an element into view once React has painted; instant when the user prefers reduced motion. */
+function scrollToId(id: string) {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const el = document.getElementById(id);
+    if (!el || typeof el.scrollIntoView !== 'function') return;
+    const calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
+  }));
+}
 
 export default function App() {
   const [url, setUrl] = useState('');
@@ -31,8 +44,10 @@ export default function App() {
   const [writing, setWriting] = useState<GeneratedFile[] | null>(null);
   const [configReady, setConfigReady] = useState(false);
   const [cwd, setCwd] = useState<string | undefined>(undefined);
+  const [focus, setFocus] = useState<{ prefix: string; n: number } | null>(null);
 
   const options: GenOptions = useMemo(() => ({ ...opts, servicePrefix: prefix }), [opts, prefix]);
+  const model = useMemo(() => groupModel(endpoints, options), [endpoints, options]);
   const errors = useMemo(() => nameErrors(endpoints), [endpoints]);
   const go = options.backend === 'go';
   const groupErrs = useMemo(() => findGroupErrors(endpoints), [endpoints]);
@@ -95,6 +110,8 @@ export default function App() {
       setEndpoints(s.endpoints);
       setComponents(s.components ?? {});
       setError(null);
+      // Hand the user to the choices that come next, instead of leaving them at the top of the page.
+      scrollToId('s1');
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); }
   };
@@ -112,26 +129,46 @@ export default function App() {
   const dirsKey = JSON.stringify(dirs);
   const stableDirs = useMemo(() => JSON.parse(dirsKey) as api.OutDirs, [dirsKey]);
 
+  const step = (n: number, id: string, title: string, lead: string) => (
+    <div className="step-head"><span className="n" aria-hidden="true">{n}</span><h2 id={id}>{title}</h2><p>{lead}</p></div>
+  );
+
   return (
-    <main>
-      <header><h1>GenroAPI</h1><p className="help">Swagger to TypeScript client and Go proxy generator</p></header>
+    <main className="wrap">
+      <header className="top">
+        <div className="brand">
+          <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><circle cx="7" cy="9" r="5" fill="var(--g1)" /><circle cx="7" cy="25" r="5" fill="var(--g4)" /><circle cx="27" cy="17" r="6" fill="var(--g2)" /><path d="M11 10 C 19 10, 19 17, 22 17 M11 24 C 19 24, 19 17, 22 17" stroke="var(--ink)" strokeWidth="2.4" fill="none" strokeLinecap="round" /></svg>
+          <span className="brand-name">GenroAPI</span>
+        </div>
+        <div className="local"><i />Runs on your computer. Your files stay there.</div>
+      </header>
       {error && (
         <div className="banner" role="alert">
           <span>{error}</span>
-          <button type="button" onClick={() => setError(null)}>Dismiss</button>
+          <button type="button" className="btn ghost" onClick={() => setError(null)}>Dismiss</button>
         </div>
       )}
       <SpecForm url={url} prefix={prefix} loading={loading} prefixRequired={go} onUrl={setUrl} onPrefix={setPrefix} onLoad={load} />
-      <OptionsPanel options={options} outDirs={outDirs} cwd={cwd}
-        onOptions={o => { const { servicePrefix: _p, ...rest } = o; setOpts(rest); }} onOutDirs={setOutDirs} />
-      {loaded && <>
-        <EndpointTable endpoints={endpoints} showGo={go} errors={errors} groupErrors={groupErrs} onChange={patch} onEnableAll={enableAll} onGroupAll={groupAll} />
-        <PreviewTabs files={files} loading={previewing} blocker={blocker} stale={stale} />
-        <div className="row end">
-          <button type="button" className="primary" disabled={!canWrite} onClick={() => setWriting(files)}>Write…</button>
-        </div>
-      </>}
+      <section className="step" aria-labelledby="s1">
+        {step(1, 's1', 'Choose what else to generate', 'You always get data shapes and the functions that call your API. Switch on extras only if your project uses them.')}
+        <OptionsPanel options={options} onOptions={o => { const { servicePrefix: _p, ...rest } = o; setOpts(rest); }} />
+      </section>
+      <section className="step" aria-labelledby="s2">
+        {step(2, 's2', 'Pick endpoints and sort them into groups', 'Each endpoint is one thing your server can do. Tick the ones you need. A colour is a group, and each group becomes its own set of files. Change an endpoint\'s group and its wire moves.')}
+        {loaded
+          ? <Board endpoints={endpoints} model={model} showGo={go} errors={errors} groupErrors={groupErrs} selectedPrefix={focus?.prefix ?? null}
+              onSelectFile={prefix => { setFocus(f => ({ prefix, n: (f?.n ?? 0) + 1 })); scrollToId('preview'); }} onChange={patch} onEnableAll={enableAll} onGroupAll={groupAll} />
+          : <div className="empty">Load a spec above. Its endpoints appear here, wired to the files they become.</div>}
+      </section>
+      <section className="step" aria-labelledby="s3">
+        {step(3, 's3', 'Read the result, then save it', 'This is exactly what will be written. It updates as you change anything above. Choose a group on the right to jump to its files.')}
+        {loaded
+          ? <PreviewTabs files={files} loading={previewing} blocker={blocker} stale={stale} colourOf={model.colourOfPath} focus={focus} />
+          : <div className="empty">The generated code appears here, ready to read before anything is saved.</div>}
+        <SaveBar go={go} outDirs={outDirs} cwd={cwd} canWrite={canWrite} fileCount={files.length} onOutDirs={setOutDirs} onWrite={() => setWriting(files)} />
+      </section>
       {writing && <WriteDialog files={writing} outDirs={stableDirs} goPackage={options.go.package} onClose={() => setWriting(null)} onError={showError} />}
+      <footer>GenroAPI writes only files named *.gen.ts and *.gen.go, and only where you tell it to.</footer>
     </main>
   );
 }

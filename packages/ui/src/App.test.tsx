@@ -43,7 +43,7 @@ async function load(user = userEvent.setup()) {
   render(<App />);
   await user.type(screen.getByLabelText('Swagger URL'), 'http://x/swagger.json');
   await user.type(screen.getByLabelText('Service prefix'), '/periodic');
-  await user.click(screen.getByRole('button', { name: 'Load' }));
+  await user.click(screen.getByRole('button', { name: 'Load endpoints' }));
   await screen.findByLabelText('Name of GET /pets');
   return user;
 }
@@ -53,11 +53,11 @@ describe('UI', () => {
   it('Load needs a URL; the prefix is optional with backend None and required (no whitespace) with Go', async () => {
     const user = userEvent.setup();
     render(<App />);
-    const btn = screen.getByRole('button', { name: 'Load' });
+    const btn = screen.getByRole('button', { name: 'Load endpoints' });
     expect(btn).toBeDisabled();
     await user.type(screen.getByLabelText('Swagger URL'), 'http://x');
     expect(btn).toBeEnabled(); // backend none: prefix not needed
-    await user.selectOptions(screen.getByLabelText('Backend'), 'go');
+    await user.click(screen.getByLabelText('Also create Go routes'));
     expect(btn).toBeDisabled();
     await user.type(screen.getByLabelText('Service prefix'), '/');
     expect(btn).toBeDisabled();
@@ -67,7 +67,7 @@ describe('UI', () => {
     await user.clear(screen.getByLabelText('Service prefix'));
     await user.type(screen.getByLabelText('Service prefix'), 'periodic');
     expect(btn).toBeEnabled();
-    await user.selectOptions(screen.getByLabelText('Backend'), 'none');
+    await user.click(screen.getByLabelText('Also create Go routes'));
     expect(btn).toBeEnabled();
   });
 
@@ -81,14 +81,14 @@ describe('UI', () => {
     const user = userEvent.setup();
     render(<App />);
     await user.type(screen.getByLabelText('Swagger URL'), 'http://x/swagger.json');
-    await user.click(screen.getByRole('button', { name: 'Load' }));
+    await user.click(screen.getByRole('button', { name: 'Load endpoints' }));
     await screen.findByLabelText('Name of GET /pets');
     await waitPreview();
     expect(lastPreview().options.servicePrefix).toBe('');
     await user.type(screen.getByLabelText('Frontend output dir'), 'web');
     const write = screen.getByRole('button', { name: /^Write/ });
     await waitFor(() => expect(write).toBeEnabled(), { timeout: 2000 });
-    await user.selectOptions(screen.getByLabelText('Backend'), 'go');
+    await user.click(screen.getByLabelText('Also create Go routes'));
     expect(write).toBeDisabled();
     const n = previews().length;
     await new Promise(r => setTimeout(r, 600));
@@ -116,11 +116,11 @@ describe('UI', () => {
 
   it('backend=none hides Go mode column', async () => {
     const user = await load();
-    expect(screen.queryByRole('columnheader', { name: 'Go mode' })).toBeNull();
-    await user.selectOptions(screen.getByLabelText('Backend'), 'go');
-    expect(screen.getByRole('columnheader', { name: 'Go mode' })).toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText('Backend'), 'none');
-    expect(screen.queryByRole('columnheader', { name: 'Go mode' })).toBeNull();
+    expect(screen.queryByLabelText('Go mode of GET /pets')).toBeNull();
+    await user.click(screen.getByLabelText('Also create Go routes'));
+    expect(screen.getByLabelText('Go mode of GET /pets')).toBeInTheDocument();
+    await user.click(screen.getByLabelText('Also create Go routes'));
+    expect(screen.queryByLabelText('Go mode of GET /pets')).toBeNull();
   });
 
   it('blocks duplicate and empty names and does not send them to preview', async () => {
@@ -181,7 +181,7 @@ describe('UI', () => {
 
   it('blocks an empty Go package name and sends the package the user typed', async () => {
     const user = await load();
-    await user.selectOptions(screen.getByLabelText('Backend'), 'go');
+    await user.click(screen.getByLabelText('Also create Go routes'));
     await user.type(screen.getByLabelText('Frontend output dir'), 'web');
     await user.type(screen.getByLabelText('Backend output dir'), 'srv');
     const write = screen.getByRole('button', { name: /^Write/ });
@@ -198,7 +198,7 @@ describe('UI', () => {
 
   it('shows cache TTL field only for cache mode', async () => {
     const user = await load();
-    await user.selectOptions(screen.getByLabelText('Backend'), 'go');
+    await user.click(screen.getByLabelText('Also create Go routes'));
     expect(screen.queryByLabelText('Cache TTL of GET /pets')).toBeNull();
     await user.selectOptions(screen.getByLabelText('Go mode of GET /pets'), 'cache');
     const ttl = screen.getByLabelText('Cache TTL of GET /pets');
@@ -216,7 +216,7 @@ describe('UI', () => {
     expect(write).toBeDisabled();
     await user.type(screen.getByLabelText('Frontend output dir'), 'web/src/api');
     await waitFor(() => expect(write).toBeEnabled());
-    await user.selectOptions(screen.getByLabelText('Backend'), 'go');
+    await user.click(screen.getByLabelText('Also create Go routes'));
     await waitFor(() => expect(write).toBeDisabled());
     await user.type(screen.getByLabelText('Backend output dir'), 'server/routers');
     await waitFor(() => expect(write).toBeEnabled(), { timeout: 2000 });
@@ -228,7 +228,7 @@ describe('UI', () => {
     render(<App />);
     await user.type(screen.getByLabelText('Swagger URL'), 'http://x');
     await user.type(screen.getByLabelText('Service prefix'), '/p');
-    await user.click(screen.getByRole('button', { name: 'Load' }));
+    await user.click(screen.getByRole('button', { name: 'Load endpoints' }));
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('cannot fetch spec');
     await user.click(within(alert).getByRole('button', { name: 'Dismiss' }));
@@ -241,7 +241,7 @@ describe('UI', () => {
     const user = userEvent.setup();
     render(<App />);
     await user.type(screen.getByLabelText('Swagger URL'), 'http://h/swagger/');
-    await user.click(screen.getByRole('button', { name: 'Load' }));
+    await user.click(screen.getByRole('button', { name: 'Load endpoints' }));
     const alert = await screen.findByRole('alert');
     expect(within(alert).getByText(msg)).toBeInTheDocument();
   });
@@ -249,7 +249,7 @@ describe('UI', () => {
   it('changed file requires checkbox before overwrite sent; shows router line', async () => {
     const user = await load();
     await user.type(screen.getByLabelText('Frontend output dir'), 'web');
-    await user.selectOptions(screen.getByLabelText('Backend'), 'go');
+    await user.click(screen.getByLabelText('Also create Go routes'));
     await user.type(screen.getByLabelText('Backend output dir'), 'srv');
     const write = screen.getByRole('button', { name: /^Write/ });
     await waitFor(() => expect(write).toBeEnabled(), { timeout: 2000 });
@@ -320,7 +320,7 @@ describe('UI', () => {
       routes['GET /api/info'] = () => ({ json: { cwd: '/Users/me/project' } });
       const user = userEvent.setup();
       render(<App />);
-      await user.selectOptions(screen.getByLabelText('Backend'), 'go');
+      await user.click(screen.getByLabelText('Also create Go routes'));
       await user.type(screen.getByLabelText('Frontend output dir'), 'src/api');
       await user.type(screen.getByLabelText('Backend output dir'), '/abs/routers');
       expect(await screen.findByText('/Users/me/project/src/api')).toBeInTheDocument();

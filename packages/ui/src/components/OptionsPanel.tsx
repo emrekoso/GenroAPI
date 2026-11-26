@@ -1,13 +1,6 @@
 import type { GenOptions } from '@genroapi/core';
-import type { OutDirs } from '../api';
-import { resolveOutDir } from '../resolvePath';
 
-interface Props {
-  options: GenOptions; outDirs: OutDirs;
-  /** Working directory the server resolves relative output dirs against (unknown until the server reports it). */
-  cwd?: string;
-  onOptions(o: GenOptions): void; onOutDirs(d: OutDirs): void;
-}
+interface Props { options: GenOptions; onOptions(o: GenOptions): void }
 
 const GO_PACKAGE_RE = /^[a-z_][a-z0-9_]*$/;
 
@@ -20,63 +13,46 @@ export function goOptionProblems(options: GenOptions): { package?: string; teaIm
   return out;
 }
 
-export function OptionsPanel({ options, outDirs, cwd, onOptions, onOutDirs }: Props) {
+export function OptionsPanel({ options, onOptions }: Props) {
   const go = options.backend === 'go';
   const problems = goOptionProblems(options);
-  const check = (k: 'query' | 'zod' | 'zustand', label: string) => (
-    <label className="check"><input type="checkbox" checked={options[k]} onChange={e => onOptions({ ...options, [k]: e.target.checked })} /> {label}</label>
+  const toggle = (k: 'query' | 'zod' | 'zustand', label: string, title: string, desc: string) => (
+    <label className="opt">
+      <input type="checkbox" aria-label={label} checked={options[k]} onChange={e => onOptions({ ...options, [k]: e.target.checked })} />
+      <b>{title} <span className="sw" aria-hidden="true" /></b>
+      <span className="d">{desc}</span>
+    </label>
   );
   return (
-    <section className="card">
-      <h2>Options</h2>
-      <div className="row wrap">
-        {check('query', 'Query hooks (TanStack Query)')}
-        {check('zod', 'Zod')}
-        {check('zustand', 'Zustand')}
-        <label className="field"><span>Backend</span>
-          <select value={options.backend} onChange={e => onOptions({ ...options, backend: e.target.value as GenOptions['backend'] })}>
-            <option value="none">None</option>
-            <option value="go">Go</option>
-          </select>
-        </label>
+    <div>
+      <div className="extras">
+        <div className="opt fixed"><b>Core files <span className="sw" aria-hidden="true" /></b><span className="d">Data shapes and functions to call each endpoint, using axios. Always included.</span></div>
+        {toggle('query', 'Query hooks', 'Query hooks', 'Ready-made React hooks that load and cache data (TanStack Query).')}
+        {toggle('zod', 'Zod', 'Zod checks', 'Verify that the data coming back really has the shape you expect.')}
+        {toggle('zustand', 'Zustand', 'Zustand stores', 'One small store per group that holds data, loading and error state.')}
       </div>
-      <p className="help">{'Calls use `/<name>` routes served by your Go proxy; endpoints with Go mode `none`, or backend `None`, call the raw spec path on the same origin.'}</p>
-      <div className="row wrap">
-        {go && <>
-          <label className="field"><span>Go package name</span>
-            <input value={options.go.package} aria-invalid={!!problems.package} onChange={e => onOptions({ ...options, go: { ...options.go, package: e.target.value } })} />
+      <label className="opt wide">
+        <input type="checkbox" aria-label="Also create Go routes" checked={go} onChange={e => onOptions({ ...options, backend: e.target.checked ? 'go' : 'none' })} />
+        <span className="grow"><b>Also create Go routes</b><span className="d">Writes the Go file that forwards each call from your app to the real server.</span></span>
+        <span className="sw" aria-hidden="true" />
+      </label>
+      <p className="hint">{'Calls use `/<name>` routes served by your Go proxy; endpoints with Go mode `none`, or backend `None`, call the raw spec path on the same origin.'}</p>
+      {go && (
+        <div className="gopanel">
+          <div className="field">
+            <label className="field"><span>Go package name</span>
+              <input value={options.go.package} aria-invalid={!!problems.package} onChange={e => onOptions({ ...options, go: { ...options.go, package: e.target.value } })} />
             </label>
-          {problems.package && <span className="err" role="note">{problems.package}</span>}
-          <label className="field grow"><span>Tea import path</span>
-            <input value={options.go.teaImport} aria-invalid={!!problems.teaImport} onChange={e => onOptions({ ...options, go: { ...options.go, teaImport: e.target.value } })} />
+            {problems.package && <span className="err" role="note">{problems.package}</span>}
+          </div>
+          <div className="field">
+            <label className="field"><span>Tea import path</span>
+              <input value={options.go.teaImport} aria-invalid={!!problems.teaImport} onChange={e => onOptions({ ...options, go: { ...options.go, teaImport: e.target.value } })} />
             </label>
-          {problems.teaImport && <span className="err" role="note">{problems.teaImport}</span>}
-        </>}
-      </div>
-      <div className="row wrap">
-        <DirField id="out-frontend" label="Frontend output dir" value={outDirs.frontend} cwd={cwd} placeholder="web/src/api"
-          onChange={v => onOutDirs({ ...outDirs, frontend: v })} />
-        {go && <DirField id="out-backend" label="Backend output dir" value={outDirs.backend ?? ''} cwd={cwd} placeholder="server/routers"
-          onChange={v => onOutDirs({ ...outDirs, backend: v })} />}
-      </div>
-    </section>
-  );
-}
-
-/** An output dir input with a hint showing the absolute folder the files will be written to. */
-function DirField({ id, label, value, cwd, placeholder, onChange }: {
-  id: string; label: string; value: string; cwd?: string; placeholder: string; onChange(v: string): void;
-}) {
-  const resolved = cwd ? resolveOutDir(cwd, value) : undefined;
-  return (
-    <div className="grow">
-      <label className="field"><span>{label}</span>
-        <input id={id} value={value} required onChange={e => onChange(e.target.value)} placeholder={placeholder}
-          aria-describedby={resolved ? `${id}-hint` : undefined} /></label>
-      {resolved && <p id={`${id}-hint`} className="hint">
-        <span aria-hidden="true">→ </span><code>{resolved.path}</code>
-        {resolved.warning && <span className="err" role="note"> {resolved.warning}</span>}
-      </p>}
+            {problems.teaImport && <span className="err" role="note">{problems.teaImport}</span>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
