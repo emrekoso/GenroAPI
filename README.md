@@ -45,7 +45,7 @@ Other scripts: `npm test` (vitest), `npm run typecheck`.
 
 ## The flow in the UI
 
-1. Enter the Swagger/OpenAPI URL (and, for the Go backend, the service prefix), press **Load**.
+1. Give it the spec: switch between **From URL** and **Paste or upload**. Paste JSON or YAML into the box, or choose a `.json` / `.yaml` / `.yml` file (up to 20 MB). For the Go backend also enter the service prefix. Press **Load**.
 2. Tick the endpoints to generate, rename them (names must be unique across all groups, valid JS identifiers, not reserved words) and pick a Go mode per endpoint (Go backend only). The **Group** column is editable: type any name (new or existing, suggestions are offered), or filter the table and use **Apply group** to move every shown endpoint at once. One group becomes one set of files and one Go `<Group>Router`, so this is how you combine endpoints, even from different tags, into one file set. Group names are trimmed, and spellings that differ only in case are merged. Every enabled endpoint needs a group. The preview is syntax coloured (TypeScript and Go).
 3. Choose options: Query hooks, Zod, Zustand, Backend (None / Go), Go package name, Tea import path.
 4. Set the output directories. The preview updates as you type; **Write...** is enabled only while the preview matches your current inputs.
@@ -134,6 +134,7 @@ SSE endpoints default to `stream`. For `cache`, the TTL field accepts shorthand 
 - The server binds to `127.0.0.1` only and checks the `Host` and `Origin` headers; it accepts JSON bodies only and sets no CORS headers.
 - It writes only files named `*.gen.ts` / `*.gen.go`, inside the directories you give, and refuses symlink escapes.
 - It fetches the Swagger URL **server-side** (http/https only, 30 s timeout, 20 MB limit): anyone who can use the UI can make your machine request a URL.
+- Pasted or uploaded specs are parsed in memory on your machine: nothing is fetched for them and the text is never saved to `genroapi.config.json` (only which input mode you used).
 - External `$ref` file/http resolution is disabled, so a spec cannot pull local files into the output. YAML is parsed with the plain core schema (no custom tags) and a bounded alias count.
 - There is no authentication: any local process can use the API. A per-session token is a possible future hardening.
 - Static responses carry `nosniff`, `Referrer-Policy: no-referrer` and a restrictive Content-Security-Policy.
