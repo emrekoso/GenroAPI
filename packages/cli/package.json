@@ -3,7 +3,25 @@
   "version": "0.1.0",
   "type": "module",
   "description": "Swagger/OpenAPI to TypeScript client + Go proxy generator",
-  "license": "UNLICENSED",
+  "author": "emrekoso",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/emrekoso/GenroAPI.git"
+  },
+  "homepage": "https://github.com/emrekoso/GenroAPI#readme",
+  "bugs": {
+    "url": "https://github.com/emrekoso/GenroAPI/issues"
+  },
+  "keywords": [
+    "openapi",
+    "swagger",
+    "typescript",
+    "axios",
+    "codegen",
+    "go",
+    "tanstack-query"
+  ],
+  "license": "MIT",
   "engines": {
     "node": ">=22.19"
   },

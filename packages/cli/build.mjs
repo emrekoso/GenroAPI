@@ -25,5 +25,8 @@ await build({
   banner: { js: "import { createRequire as __cr } from 'node:module';const require = __cr(import.meta.url);" },
 });
 await cp(ui, here('dist/ui'), { recursive: true });
+// npm only picks up README/LICENSE from the package dir, so copy the repo-level ones in (git-ignored copies).
+await cp(here('../../README.md'), here('README.md'));
+await cp(here('../../LICENSE'), here('LICENSE')).catch(e => { if (e?.code !== 'ENOENT') throw e; });
 // npm links the bin straight to this file in a workspace install, so it must be executable.
 await chmod(here('dist/bin.js'), 0o755);
