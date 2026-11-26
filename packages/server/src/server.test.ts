@@ -81,6 +81,45 @@ describe('/api/spec', () => {
       expect((await post('/api/spec', { url: `${base}/bad` })).statusCode).toBe(502);
     } finally { srv.close(); }
   });
+  describe('text input', () => {
+    const SPEC = { openapi: '3.0.0', info: { title: 'T', version: '1' }, paths: { '/ping': { get: { responses: { 200: { description: 'ok' } } } } } };
+    it('valid JSON text returns endpoints', async () => {
+      const r = await post('/api/spec', { text: JSON.stringify(SPEC) });
+      expect(r.statusCode).toBe(200);
+      expect(r.json().endpoints[0].path).toBe('/ping');
+    });
+    it('YAML text works', async () => {
+      const r = await post('/api/spec', { text: 'openapi: 3.0.0\ninfo: {title: T, version: "1"}\npaths:\n  /ping:\n    get:\n      responses:\n        "200": {description: ok}\n' });
+      expect(r.statusCode).toBe(200);
+      expect(r.json().endpoints[0].path).toBe('/ping');
+    });
+    it('invalid text gives 400 with a message', async () => {
+      const r = await post('/api/spec', { text: 'a: [1,' });
+      expect(r.statusCode).toBe(400);
+      expect(r.json().error).toMatch(/not valid JSON or YAML/);
+    });
+    it('HTML gives 400', async () => {
+      expect((await post('/api/spec', { text: '<!doctype html><html></html>' })).statusCode).toBe(400);
+    });
+    it('both url and text, neither, and blank text give 400', async () => {
+      expect((await post('/api/spec', { url: 'http://x/a.json', text: '{}' })).statusCode).toBe(400);
+      expect((await post('/api/spec', {})).statusCode).toBe(400);
+      expect((await post('/api/spec', { text: '   ' })).statusCode).toBe(400);
+      expect((await post('/api/spec', { text: 5 })).statusCode).toBe(400);
+    });
+    it('external $ref in text is not fetched', async () => {
+      let hits = 0;
+      const srv = http.createServer((_q, s) => { hits++; s.end('{}'); });
+      await new Promise<void>(r => srv.listen(0, '127.0.0.1', r));
+      try {
+        const ref = `http://127.0.0.1:${(srv.address() as any).port}/x.json`;
+        const spec = { ...SPEC, paths: { '/ping': { get: { responses: { 200: { description: 'ok', content: { 'application/json': { schema: { $ref: ref } } } } } } } } };
+        const r = await post('/api/spec', { text: JSON.stringify(spec) });
+        expect(hits).toBe(0);
+        expect([200, 400]).toContain(r.statusCode);
+      } finally { srv.close(); }
+    });
+  });
   it('400 on missing / non-string url', async () => {
     expect((await post('/api/spec', {})).statusCode).toBe(400);
     expect((await post('/api/spec', { url: 5 })).statusCode).toBe(400);

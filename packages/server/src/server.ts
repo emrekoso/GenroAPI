@@ -1,5 +1,5 @@
 import Fastify, { type FastifyInstance } from 'fastify';
-import { fetchSpec, parseSpec, plan, RESERVED_WORDS, type Endpoint, type GenOptions, type GeneratedFile, type JsonSchema } from '@genroapi/core';
+import { fetchSpec, parseSpec, parseSpecText, plan, RESERVED_WORDS, type Endpoint, type GenOptions, type GeneratedFile, type JsonSchema } from '@genroapi/core';
 import { diffFiles, writeFiles, WriterError, type OutDirs } from './writer.js';
 import { realpath } from 'node:fs/promises';
 import { resolve as resolvePath } from 'node:path';
@@ -111,7 +111,16 @@ export function buildServer(opts: ServerOpts = {}): FastifyInstance {
 
   app.post('/api/spec', async (req, reply) => {
     const body = req.body;
-    if (!isObj(body) || typeof body.url !== 'string' || body.url === '') return bad('url is required');
+    if (!isObj(body)) return bad('body must be an object');
+    const hasUrl = body.url !== undefined, hasText = body.text !== undefined;
+    if (hasUrl && hasText) return bad('send either url or text, not both');
+    if (hasText) {
+      // Pasted or uploaded spec: parsed in memory, nothing is fetched. Any failure is the caller's input, so 400.
+      if (typeof body.text !== 'string' || body.text.trim() === '') return bad('text must be a non-empty string');
+      try { return await parseSpec(parseSpecText(body.text)); }
+      catch (e) { return bad(e instanceof Error ? e.message : String(e)); }
+    }
+    if (typeof body.url !== 'string' || body.url === '') return bad('url or text is required');
     try { return await parseSpec(await fetchSpec(body.url)); }
     catch (e) { return reply.code(502).send({ error: e instanceof Error ? e.message : String(e) }); }
   });
