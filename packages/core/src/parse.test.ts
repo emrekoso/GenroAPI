@@ -4,7 +4,7 @@ import http from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { parseSpec, fetchSpec } from './parse.js';
+import { parseSpec, fetchSpec, parseSpecText } from './parse.js';
 import { toIdent, uniqueName } from './naming.js';
 
 const load = (n: string) => JSON.parse(readFileSync(new URL(`../fixtures/${n}`, import.meta.url), 'utf8'));
@@ -242,5 +242,32 @@ paths:
   it('YAML alias bombs are refused', async () => {
     const many = 'a: &a x\nb: [' + Array(2000).fill('*a').join(',') + ']';
     await expect(fetchSpec(await serve(many, 'application/yaml'))).rejects.toThrow(/not valid JSON or YAML/);
+  });
+});
+
+describe('parseSpecText', () => {
+  it('parses JSON text', () => {
+    expect(parseSpecText('{"openapi":"3.0.0","paths":{}}')).toEqual({ openapi: '3.0.0', paths: {} });
+  });
+  it('parses YAML text', () => {
+    expect((parseSpecText('openapi: 3.0.0\npaths: {}\n') as any).paths).toEqual({});
+  });
+  it('strips a BOM', () => {
+    expect((parseSpecText('\uFEFF{"openapi":"3.0.0"}') as any).openapi).toBe('3.0.0');
+  });
+  it('rejects an HTML page without guessing a spec URL', () => {
+    const f = () => parseSpecText('<!doctype html><html></html>');
+    expect(f).toThrow(/not an OpenAPI document/);
+    expect(f).not.toThrow(/Found a possible spec URL/);
+  });
+  it('rejects arrays and scalars', () => {
+    expect(() => parseSpecText('[1]')).toThrow(/describing an object/);
+    expect(() => parseSpecText('hello')).toThrow(/describing an object/);
+  });
+  it('invalid YAML names the parser problem', () => {
+    expect(() => parseSpecText('a: [1,')).toThrow(/not valid JSON or YAML/);
+  });
+  it('enforces maxBytes', () => {
+    expect(() => parseSpecText('{"a":1}', { maxBytes: 3 })).toThrow(/too large/);
   });
 });

@@ -58,6 +58,13 @@ export async function fetchSpec(url: string, opts: FetchOpts = {}): Promise<obje
   return parseBody(text, ctype, url, where);
 }
 
+/** Parse a spec the user pasted or uploaded (JSON or YAML). Same rules and size cap as a fetched spec; nothing is fetched. */
+export function parseSpecText(text: string, opts: { maxBytes?: number } = {}): object {
+  const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
+  if (Buffer.byteLength(text) > maxBytes) throw new Error(`Spec text is too large (limit ${maxBytes} bytes)`);
+  return parseBody(text, '', undefined, 'pasted text');
+}
+
 const HTML_HINT = 'If this is a Swagger UI page, use the spec URL it loads (e.g. /openapi.json, /openapi.yaml, /swagger/doc.json, /v3/api-docs).';
 
 /** Best-effort: a spec reference inside a Swagger UI / Redoc / RapiDoc page, resolved against the page URL (suggested only, never fetched). */
@@ -70,10 +77,10 @@ function discoverSpecUrl(html: string, pageUrl: string): string | undefined {
   } catch { return undefined; }
 }
 
-function parseBody(text: string, ctype: string, url: string, where: string): object {
+function parseBody(text: string, ctype: string, url: string | undefined, where: string): object {
   const body = text.replace(/^\uFEFF/, '').trim();
   if (ctype.includes('text/html') || /^<!doctype\s+html|^<html[\s>]/i.test(body)) {
-    const guess = discoverSpecUrl(body, url);
+    const guess = url ? discoverSpecUrl(body, url) : undefined;
     throw new Error(`Got an HTML page from ${where}, not an OpenAPI document. ${HTML_HINT}${guess ? ` Found a possible spec URL: ${guess}` : ''}`);
   }
   let value: unknown;

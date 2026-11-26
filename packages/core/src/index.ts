@@ -1,5 +1,5 @@
 export * from './model.js';
-export { parseSpec, fetchSpec } from './parse.js';
+export { parseSpec, fetchSpec, parseSpecText } from './parse.js';
 export { toIdent, uniqueName } from './naming.js';
 export { RESERVED_WORDS } from './reserved.js';
 export { resolveUpstream } from './upstream.js';
