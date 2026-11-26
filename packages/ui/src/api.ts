@@ -18,7 +18,7 @@ async function call<T>(method: string, url: string, body?: unknown, signal?: Abo
   return data as T;
 }
 
-export const loadSpec = (url: string) => call<SpecResult>('POST', '/api/spec', { url });
+export const loadSpec = (input: { url: string } | { text: string }) => call<SpecResult>('POST', '/api/spec', input);
 export const preview = (endpoints: Endpoint[], options: GenOptions, components: unknown, signal?: AbortSignal) =>
   call<{ files: GeneratedFile[] }>('POST', '/api/preview', { endpoints, options, components }, signal);
 export const diff = (files: GeneratedFile[], outDirs: OutDirs) => call<DiffEntry[]>('POST', '/api/diff', { files, outDirs });

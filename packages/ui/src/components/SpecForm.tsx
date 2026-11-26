@@ -1,4 +1,12 @@
+export type InputMode = "url" | "text";
+export const MAX_SPEC_BYTES = 20 * 1024 * 1024;
+
 interface Props {
+  mode: InputMode;
+  text: string;
+  onMode(m: InputMode): void;
+  onText(v: string): void;
+  onError(msg: string): void;
   url: string;
   prefix: string;
   loading: boolean;
@@ -18,7 +26,20 @@ export function prefixProblem(p: string, required: boolean): string | null {
 export const prefixValid = (p: string, required: boolean): boolean =>
   prefixProblem(p, required) === null;
 
+const readText = (file: File): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result ?? ""));
+    r.onerror = () => reject(r.error ?? new Error("Could not read the file"));
+    r.readAsText(file);
+  });
+
 export function SpecForm({
+  mode,
+  text,
+  onMode,
+  onText,
+  onError,
   url,
   prefix,
   loading,
@@ -28,14 +49,27 @@ export function SpecForm({
   onLoad,
 }: Props) {
   const problem = prefixProblem(prefix, prefixRequired);
-  const ok = url.trim() !== "" && problem === null;
+  const hasSpec = mode === "url" ? url.trim() !== "" : text.trim() !== "";
+  const ok = hasSpec && problem === null;
+  const pick = async (file: File | undefined) => {
+    if (!file) return;
+    if (file.size > MAX_SPEC_BYTES) return onError("That file is too large (limit 20 MB).");
+    if (!/\.(json|ya?ml)$/i.test(file.name)) return onError(`${file.name} is not a .json, .yaml or .yml file.`);
+    try {
+      const content = await readText(file);
+      // A binary file read as text contains NUL or replacement characters; never overwrite the textarea with it.
+      if (/[\u0000\uFFFD]/.test(content)) return onError(`${file.name} is not a text file.`);
+      onText(content);
+    }
+    catch (e) { onError(`Could not read ${file.name}: ${e instanceof Error ? e.message : String(e)}`); }
+  };
   return (
     <section className="hero">
       <div>
         <h1>Turn an API's description into code you can use.</h1>
         <p className="lede">
           Every server publishes a list of what it can do. Paste the link to
-          that list. GenroAPI reads it and writes the TypeScript, Tanstack
+          that list, or the file itself. GenroAPI reads it and writes the TypeScript, Tanstack
           Query, Zod, Zustand and Go proxy files for you, so nobody types them
           by hand.
         </p>
@@ -46,18 +80,55 @@ export function SpecForm({
             if (ok && !loading) onLoad();
           }}
         >
-          <div className="load">
-            <input
-              value={url}
-              aria-label="Swagger URL"
-              onChange={(e) => onUrl(e.target.value)}
-              placeholder="https://your-server/openapi.json"
-              spellCheck={false}
-            />
-            <button type="submit" className="btn" disabled={!ok || loading}>
-              {loading ? "Loading…" : "Load endpoints"}
-            </button>
+          <div className="seg" role="radiogroup" aria-label="Spec source">
+            <label className={mode === "url" ? "on" : ""}>
+              <input type="radio" name="spec-source" checked={mode === "url"} onChange={() => onMode("url")} />
+              From URL
+            </label>
+            <label className={mode === "text" ? "on" : ""}>
+              <input type="radio" name="spec-source" checked={mode === "text"} onChange={() => onMode("text")} />
+              Paste or upload
+            </label>
           </div>
+          {mode === "url" ? (
+            <div className="load">
+              <input
+                value={url}
+                aria-label="Swagger URL"
+                onChange={(e) => onUrl(e.target.value)}
+                placeholder="https://your-server/openapi.json"
+                spellCheck={false}
+              />
+              <button type="submit" className="btn" disabled={!ok || loading}>
+                {loading ? "Loading…" : "Load endpoints"}
+              </button>
+            </div>
+          ) : (
+            <div className="paste">
+              <textarea
+                value={text}
+                aria-label="Spec text"
+                onChange={(e) => onText(e.target.value)}
+                placeholder="Paste the JSON or YAML here, or choose a file below"
+                spellCheck={false}
+                rows={8}
+              />
+              <div className="paste-row">
+                <label className="file">
+                  <span>Choose a .json or .yaml file</span>
+                  <input
+                    type="file"
+                    aria-label="Upload spec file"
+                    accept=".json,.yaml,.yml,application/json,text/yaml,text/plain"
+                    onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ""; }}
+                  />
+                </label>
+                <button type="submit" className="btn" disabled={!ok || loading}>
+                  {loading ? "Loading…" : "Load endpoints"}
+                </button>
+              </div>
+            </div>
+          )}
           <label className="field prefix-field">
             <span>
               Service prefix <small>(only needed for Go routes)</small>
@@ -72,8 +143,9 @@ export function SpecForm({
             />
           </label>
           <p className="hint">
-            The URL must be the spec document itself (JSON or YAML), not the
-            Swagger UI page.
+            {mode === "url"
+              ? "The URL must be the spec document itself (JSON or YAML), not the Swagger UI page."
+              : "Paste or upload the spec document itself (JSON or YAML). It is read on your computer and never saved."}
           </p>
           <p id="prefix-help" className="hint">
             The prefix is only used for the Go upstream path (required for Go,

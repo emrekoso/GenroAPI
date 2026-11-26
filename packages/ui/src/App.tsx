@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Endpoint, GenOptions, GeneratedFile } from '@genroapi/core';
 import * as api from './api';
-import { SpecForm, prefixValid } from './components/SpecForm';
+import { SpecForm, prefixValid, type InputMode } from './components/SpecForm';
 import { nameErrors } from './components/EndpointTable';
 import { Board } from './components/Board';
 import { SaveBar } from './components/SaveBar';
@@ -30,6 +30,8 @@ function scrollToId(id: string) {
 
 export default function App() {
   const [url, setUrl] = useState('');
+  const [mode, setMode] = useState<InputMode>('url');
+  const [specText, setSpecText] = useState('');
   const [prefix, setPrefix] = useState('');
   const [opts, setOpts] = useState<Omit<GenOptions, 'servicePrefix'>>(DEFAULT_OPTIONS);
   const [outDirs, setOutDirs] = useState<api.OutDirs>({ frontend: '', backend: '' });
@@ -65,6 +67,7 @@ export default function App() {
     api.getConfig().then(c => {
       if (!alive || !c || typeof c !== 'object') return;
       if (typeof c.url === 'string') setUrl(c.url);
+      if (c.inputMode === 'url' || c.inputMode === 'text') setMode(c.inputMode);
       if (typeof c.prefix === 'string') setPrefix(c.prefix);
       if (c.options && typeof c.options === 'object') {
         const { servicePrefix: _ignored, ...o } = c.options;
@@ -85,9 +88,9 @@ export default function App() {
   // Debounced config save.
   useEffect(() => {
     if (!configReady) return;
-    const t = setTimeout(() => { api.putConfig({ url, prefix, options: opts, outDirs }).catch(() => {}); }, SAVE_DELAY);
+    const t = setTimeout(() => { api.putConfig({ url, inputMode: mode, prefix, options: opts, outDirs }).catch(() => {}); }, SAVE_DELAY);
     return () => clearTimeout(t);
-  }, [configReady, url, prefix, opts, outDirs]);
+  }, [configReady, url, mode, prefix, opts, outDirs]);
 
   // Debounced preview.
   const loaded = endpoints.length > 0;
@@ -106,7 +109,7 @@ export default function App() {
   const load = async () => {
     setLoading(true);
     try {
-      const s = await api.loadSpec(url.trim());
+      const s = await api.loadSpec(mode === 'url' ? { url: url.trim() } : { text: specText });
       setEndpoints(s.endpoints);
       setComponents(s.components ?? {});
       setError(null);
@@ -148,7 +151,7 @@ export default function App() {
           <button type="button" className="btn ghost" onClick={() => setError(null)}>Dismiss</button>
         </div>
       )}
-      <SpecForm url={url} prefix={prefix} loading={loading} prefixRequired={go} onUrl={setUrl} onPrefix={setPrefix} onLoad={load} />
+      <SpecForm mode={mode} text={specText} onMode={setMode} onText={setSpecText} onError={showError} url={url} prefix={prefix} loading={loading} prefixRequired={go} onUrl={setUrl} onPrefix={setPrefix} onLoad={load} />
       <section className="step" aria-labelledby="s1">
         {step(1, 's1', 'Choose what else to generate', 'You always get data shapes and the functions that call your API. Switch on extras only if your project uses them.')}
         <OptionsPanel options={options} onOptions={o => { const { servicePrefix: _p, ...rest } = o; setOpts(rest); }} />

@@ -196,3 +196,14 @@ footer { padding: 24px 0 40px; color: var(--muted); font-size: 14px; border-top:
   .wires.draw path { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
   * { transition: none !important; scroll-behavior: auto !important; }
 }
+
+/* Spec source switch and paste area */
+.seg { display: inline-flex; gap: 4px; padding: 4px; border: 2px solid var(--ink); border-radius: 12px; background: var(--surface); justify-self: start; }
+.seg label { display: inline-flex; align-items: center; padding: 6px 14px; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; }
+.seg label.on { background: var(--ink); color: var(--surface); }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label:focus-within { outline: 2px solid var(--g2); outline-offset: 2px; }
+.paste { display: grid; gap: 10px; }
+.paste textarea { width: 100%; box-sizing: border-box; background: var(--surface); color: var(--ink); border: 2px solid var(--ink); border-radius: 12px; padding: 12px; font: 13px/1.5 var(--mono); resize: vertical; min-height: 140px; }
+.paste-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.file { font-size: 14px; color: var(--muted); display: inline-flex; gap: 8px; align-items: center; }

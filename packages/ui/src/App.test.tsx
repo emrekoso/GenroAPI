@@ -437,3 +437,122 @@ describe('UI', () => {
     });
   });
 });
+
+describe('paste or upload a spec', () => {
+  const toPaste = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(screen.getByRole('radio', { name: 'Paste or upload' }));
+    return screen.getByLabelText('Spec text');
+  };
+  const paste = async (user: ReturnType<typeof userEvent.setup>, text: string) => {
+    const ta = await toPaste(user);
+    await user.click(ta);
+    await user.paste(text);
+    return ta;
+  };
+  const specCalls = () => calls.filter(c => c.url === '/api/spec');
+
+  it('switching to Paste or upload shows the textarea and hides the URL input, and back', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    expect(screen.queryByLabelText('Spec text')).toBeNull();
+    await toPaste(user);
+    expect(screen.queryByLabelText('Swagger URL')).toBeNull();
+    expect(screen.getByLabelText('Upload spec file')).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'From URL' }));
+    expect(screen.getByLabelText('Swagger URL')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Spec text')).toBeNull();
+  });
+
+  it('Load is disabled for empty or whitespace text and enabled once there is text', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await toPaste(user);
+    const btn = screen.getByRole('button', { name: 'Load endpoints' });
+    expect(btn).toBeDisabled();
+    await user.click(screen.getByLabelText('Spec text'));
+    await user.paste('   \n ');
+    expect(btn).toBeDisabled();
+    await user.paste('openapi: 3.0.0');
+    expect(btn).toBeEnabled();
+    expect(specCalls()).toHaveLength(0);
+  });
+
+  it('loading pasted text posts only {text} and shows the endpoints', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await paste(user, 'openapi: 3.0.0');
+    await user.click(screen.getByRole('button', { name: 'Load endpoints' }));
+    await screen.findByLabelText('Name of GET /pets');
+    expect(specCalls()[0].body).toEqual({ text: 'openapi: 3.0.0' });
+  });
+
+  it('uploading a .yaml file fills the textarea', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await toPaste(user);
+    await user.upload(screen.getByLabelText('Upload spec file'), new File(['openapi: 3.0.0\npaths: {}'], 'a.yaml', { type: 'text/yaml' }));
+    await waitFor(() => expect(screen.getByLabelText('Spec text')).toHaveValue('openapi: 3.0.0\npaths: {}'));
+  });
+
+  it('an oversized upload shows an error and leaves the textarea empty', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await toPaste(user);
+    const big = new File(['x'], 'big.json', { type: 'application/json' });
+    Object.defineProperty(big, 'size', { value: 21 * 1024 * 1024 });
+    await user.upload(screen.getByLabelText('Upload spec file'), big);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/too large/i);
+    expect(screen.getByLabelText('Spec text')).toHaveValue('');
+  });
+
+  it('a wrong-type upload shows an error and keeps what was already pasted', async () => {
+    const user = userEvent.setup({ applyAccept: false });
+    render(<App />);
+    await paste(user, 'openapi: 3.0.0');
+    await user.upload(screen.getByLabelText('Upload spec file'), new File(['PNGDATA'], 'logo.png', { type: 'image/png' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/\.json|\.yaml/i);
+    expect(screen.getByLabelText('Spec text')).toHaveValue('openapi: 3.0.0');
+  });
+
+  it('a binary file with a .json name is rejected and the textarea is untouched', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await toPaste(user);
+    await user.upload(screen.getByLabelText('Upload spec file'), new File(['ab\0cd'], 'a.json', { type: 'application/json' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(/text/i);
+    expect(screen.getByLabelText('Spec text')).toHaveValue('');
+  });
+
+  it('keeps both inputs when switching modes, and URL mode still posts {url}', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await user.type(screen.getByLabelText('Swagger URL'), 'http://x/s.json');
+    await paste(user, 'openapi: 3.0.0');
+    await user.click(screen.getByRole('radio', { name: 'From URL' }));
+    expect(screen.getByLabelText('Swagger URL')).toHaveValue('http://x/s.json');
+    await user.click(screen.getByRole('button', { name: 'Load endpoints' }));
+    await screen.findByLabelText('Name of GET /pets');
+    expect(specCalls()[0].body).toEqual({ url: 'http://x/s.json' });
+    await user.click(screen.getByRole('radio', { name: 'Paste or upload' }));
+    expect(screen.getByLabelText('Spec text')).toHaveValue('openapi: 3.0.0');
+  });
+
+  it('saves inputMode in the config but never the pasted text', async () => {
+    const user = userEvent.setup();
+    render(<App />);
+    await paste(user, 'SECRET-SPEC-TEXT');
+    await waitFor(() => expect(calls.some(c => c.method === 'PUT' && c.body?.inputMode === 'text')).toBe(true), { timeout: 2000 });
+    expect(JSON.stringify(calls.filter(c => c.method === 'PUT').map(c => c.body))).not.toContain('SECRET-SPEC-TEXT');
+  });
+
+  it('restores inputMode from the config, ignoring unknown values', async () => {
+    routes['GET /api/config'] = () => ({ json: { inputMode: 'text' } });
+    const { unmount } = render(<App />);
+    await waitFor(() => expect(screen.getByLabelText('Spec text')).toBeInTheDocument());
+    unmount();
+    routes['GET /api/config'] = () => ({ json: { inputMode: 'bogus' } });
+    render(<App />);
+    await waitFor(() => expect(calls.filter(c => c.url === '/api/config' && c.method === 'GET').length).toBe(2));
+    expect(screen.getByLabelText('Swagger URL')).toBeInTheDocument();
+  });
+});
