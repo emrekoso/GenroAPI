@@ -2,3 +2,5 @@ node_modules
 dist
 .superpowers
 .tmp-e2e
+packages/cli/README.md
+packages/cli/LICENSE
