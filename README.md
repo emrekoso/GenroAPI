@@ -1,4 +1,4 @@
-# GenroAPI
+# GenroAPI [![npm](https://img.shields.io/npm/v/genroapi)](https://www.npmjs.com/package/genroapi)
 
 A local web tool and CLI that turns a Swagger / OpenAPI document into:
 
@@ -33,13 +33,13 @@ npx genroapi           # starts the tool and opens the browser
 
 Flags:
 
-| Flag | Meaning |
-| --- | --- |
-| `--port <n>` | Port to listen on (default `0`: pick a free port) |
-| `--no-open` | Do not open the browser |
-| `--cwd <dir>` | Directory that holds `genroapi.config.json` and that relative output dirs resolve against (default: current dir; it must exist) |
-| `--ui-dir <dir>` | Serve a different built UI (default: the bundled one) |
-| `--help`, `--version` | Usage / version |
+| Flag                  | Meaning                                                                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `--port <n>`          | Port to listen on (default `0`: pick a free port)                                                                               |
+| `--no-open`           | Do not open the browser                                                                                                         |
+| `--cwd <dir>`         | Directory that holds `genroapi.config.json` and that relative output dirs resolve against (default: current dir; it must exist) |
+| `--ui-dir <dir>`      | Serve a different built UI (default: the bundled one)                                                                           |
+| `--help`, `--version` | Usage / version                                                                                                                 |
 
 Other scripts: `npm test` (vitest), `npm run typecheck`.
 
@@ -64,14 +64,14 @@ Go backend and optional otherwise; axios URLs never contain it.
 Output directories are relative to `--cwd` (or absolute). Frontend files go to the frontend dir, the Go file to the backend dir. The page shows the absolute folder each one resolves to under the field (`→ /Users/you/project/src/api`); `~` is not expanded, so use an absolute path instead.
 Only files named `*.gen.ts` / `*.gen.go` are ever written. For every group (OpenAPI tag, or first path segment when untagged), with slug `<g>`:
 
-| File | When |
-| --- | --- |
-| `<g>.types.gen.ts` | always |
-| `<g>.service.gen.ts` | always |
-| `<g>.zod.gen.ts` | Zod on |
-| `<g>.query.gen.ts` | Query hooks on |
-| `<g>.store.gen.ts` | Zustand on |
-| `<g>.gen.go` | Backend Go |
+| File                 | When           |
+| -------------------- | -------------- |
+| `<g>.types.gen.ts`   | always         |
+| `<g>.service.gen.ts` | always         |
+| `<g>.zod.gen.ts`     | Zod on         |
+| `<g>.query.gen.ts`   | Query hooks on |
+| `<g>.store.gen.ts`   | Zustand on     |
+| `<g>.gen.go`         | Backend Go     |
 
 ## Using the generated code
 
@@ -98,14 +98,14 @@ routers.PeriodicRouter(router)
 
 Go modes:
 
-| Mode | Generated call |
-| --- | --- |
-| `proxy` | `router.HandleProxy(route, upstream)` |
-| `unsecure` | `router.HandleProxyUnsecure(route, upstream)` |
-| `cache` | `router.HandleProxyWithCache(route, upstream, ttl)` |
-| `stream` | `router.HandleStream(route, upstream)` |
-| `passthrough` | `router.HandleStreamPassthrough(route, upstream)` |
-| `none` | no route (frontend calls the raw spec path) |
+| Mode          | Generated call                                      |
+| ------------- | --------------------------------------------------- |
+| `proxy`       | `router.HandleProxy(route, upstream)`               |
+| `unsecure`    | `router.HandleProxyUnsecure(route, upstream)`       |
+| `cache`       | `router.HandleProxyWithCache(route, upstream, ttl)` |
+| `stream`      | `router.HandleStream(route, upstream)`              |
+| `passthrough` | `router.HandleStreamPassthrough(route, upstream)`   |
+| `none`        | no route (frontend calls the raw spec path)         |
 
 SSE endpoints default to `stream`. For `cache`, the TTL field accepts shorthand such as `500ms`, `30s`, `5m`, `1h`
 (emitted as `5*time.Minute`, with `"time"` imported), any other value as a raw Go expression, and empty means the constant
